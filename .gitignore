@@ -1,0 +1,38 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs & temp
+*.log
+*.tmp
+*.cache
+__pycache__/
+*.pyc
+.env
+.env.local
+
+# Coverage & test artifacts
+coverage/
+.nyc_output/
+*.lcov

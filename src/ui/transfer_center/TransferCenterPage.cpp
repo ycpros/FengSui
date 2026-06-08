@@ -1,0 +1,31 @@
+// TransferCenterPage.cpp
+// 传输中心页面占位：展示所有文件传输任务。后续任务 012 中实现完整传输面板。
+
+#include "ui/transfer_center/TransferCenterPage.h"
+
+#include <QLabel>
+#include <QVBoxLayout>
+
+namespace FengSui {
+
+TransferCenterPage::TransferCenterPage(QWidget* parent)
+    : QWidget(parent)
+{
+    auto* layout = new QVBoxLayout(this);
+
+    // 页面标题
+    auto* titleLabel = new QLabel(QString::fromUtf8("\xe4\xbc\xa0\xe8\xbe\x93\xe4\xb8\xad\xe5\xbf\x83"), this);  // 传输中心
+    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; padding: 12px;");
+
+    // 空态提示
+    auto* emptyLabel = new QLabel(QString::fromUtf8("\xe6\x9a\x82\xe6\x97\xa0\xe4\xbc\xa0\xe8\xbe\x93\xe4\xbb\xbb\xe5\x8a\xa1"), this);  // 暂无传输任务
+    emptyLabel->setAlignment(Qt::AlignCenter);
+    emptyLabel->setStyleSheet("color: #999; font-size: 14px;");
+
+    layout->addWidget(titleLabel);
+    layout->addStretch();
+    layout->addWidget(emptyLabel);
+    layout->addStretch();
+}
+
+} // namespace FengSui
