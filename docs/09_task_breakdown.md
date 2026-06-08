@@ -26,6 +26,13 @@
 | 验收标准 | 1. 目录结构与 [04_architecture.md](./04_architecture.md) 一致。2. Logger 可输出到文件和控制台。3. Database 初始化 SQLite 并执行 schema 创建。4. 所有 models/ 头文件编译通过。 |
 | 禁止 | 不要实现任何业务逻辑。 |
 
+> ⚠ **回溯改造（[14_network_model.md](./14_network_model.md)）** — 本任务已完成，需补充：
+>
+> 1. 新增 `src/models/NetworkPolicy.h`：定义 `NetworkMode` 枚举（`secure_lan` / `multi_lan` / `compat_test`）、`BindEndpoint` 结构体、`isAddressAllowed()` / `isCidrAllowed()` 等判定方法
+> 2. 新增 `src/platform/InterfaceEnumerator.h/.cpp`：枚举本机所有网卡，按 §4.1 规则分类（排除 loopback、`169.254.0.0/16`、未连接、虚拟网卡），输出候选列表
+> 3. NetworkPolicy 默认值：`mode = secure_lan`，仅含主物理网卡 + 其所在 /24 CIDR
+> 4. 附带三种网络模式的行为矩阵单元测试
+
 ---
 
 ## 第 1 阶段：UI 壳子
@@ -47,6 +54,14 @@
 | 涉及文件 | `src/ui/onboarding/OnboardingWizard.*` |
 | 验收标准 | 1. `onboarding_completed = false` 时启动向导。2. 用户可通过 3 步完成设置。3. 完成后设置写入 SQLite，`onboarding_completed = true`，主窗口打开。4. 中途关闭窗口不保存。 |
 | 禁止 | 不要实现自动发现或网络功能。 |
+
+> ⚠ **回溯改造（[14_network_model.md](./14_network_model.md)）** — 本任务已完成，需补充：
+>
+> 1. 新增第 4 步向导页：当 `InterfaceEnumerator` 检测到多个候选网卡时展示，单选/多选取决于默认模式（`secure_lan` 单选、`multi_lan` 多选）
+> 2. 默认勾选主物理网卡，ZeroTier/Tailscale/VMware/Hyper-V/WSL 默认不勾选
+> 3. `169.254.0.0/16` 和公网地址默认禁用并标注原因
+> 4. 选择结果写入 `settings` 表（`selectedInterfaces`、`allowedCidrs`）
+> 5. 单网卡环境自动跳过此页（无需用户选择）
 
 ### 任务 005 — UI 页面占位
 
@@ -70,6 +85,13 @@
 | 验收标准 | 1. 启动后每 5 秒发送 presence.hello。2. 收到其他设备的 hello 后加入 PeerInfo 列表。3. 15 秒未收到心跳标记离线。4. 退出时发送 presence.goodbye（尽力）。5. 提供 signal：`peerOnline(PeerInfo)`、`peerOffline(QString peerId)`。 |
 | 禁止 | 不要引入 mDNS/Avahi/Bonjour 依赖。 |
 
+> ⚠ **回溯改造（[14_network_model.md](./14_network_model.md)）** — 本任务已完成，需补充：
+>
+> 1. **发送侧**：`UdpDiscovery` 不再使用"第一个非回环 IPv4"，改为从 `NetworkPolicy` 获取授权接口列表，每个接口独立发送 directed broadcast（目标地址为该接口网段的广播地址）
+> 2. **接收侧**：`BeaconService::handleDatagram` 增加校验：来源 IP 必须在允许 CIDR 内，报文宣告 IP 必须在允许 CIDR 内，`peer_id` 不能为空或与本机冲突；不满足的报文写入诊断日志但不入在线设备列表
+> 3. `presence.hello` 协议扩展 `addresses` 字段（保持向后兼容：接收端优先用 `addresses`，缺失时回退到 `ip`/`tcp_port`）
+> 4. `secure_lan`：仅授权单网卡发现；`multi_lan`：每个授权网卡独立发现不跨网段
+
 ### 任务 007 — 在线设备列表（联系人页）
 
 | 项 | 内容 |
@@ -88,6 +110,13 @@
 | 验收标准 | 1. 输入合法 IP 和端口 → 尝试 TCP 连接。2. 连接成功 → 设备出现在列表中。3. 格式错误或连接失败给出提示。 |
 | 禁止 | 不要修改 UDP 发现逻辑。 |
 
+> ⚠ **回溯改造（[14_network_model.md](./14_network_model.md)）** — 本任务已完成，需补充：
+>
+> 1. 在 TCP 探测前增加 CIDR 校验：目标 IP 必须在 `allowedCidrs` 内
+> 2. 成功连接后持久化到 `manual_peers`（含 name、host、port、`last_success_at`）
+> 3. 手动 peer 优先级高于自动发现结果，自动发现不覆盖已有手动 peer
+> 4. 手动 peer 进入"候选设备/未信任"状态，与自动发现设备一致
+
 ---
 
 ## 第 3 阶段：文本消息
@@ -100,6 +129,13 @@
 | 涉及文件 | `src/network/TcpServer.*`、`src/network/TcpConnection.*`、`src/network/Protocol.*`、`src/core/SignalService.*` |
 | 验收标准 | 1. 启动时监听配置端口。2. 连接其他设备时发送 message.text → 对方收到并回复 message.ack。3. 消息按 `[4字节长度][JSON]` 格式收发。4. 连接断开时通知 SignalService。 |
 | 禁止 | 不要实现聊天 UI 存储。 |
+
+> ⚠ **回溯改造（[14_network_model.md](./14_network_model.md)）** — 本任务已完成，需补充：
+>
+> 1. `TcpServer` 从单 `QTcpServer` 改为支持多个绑定端点，每个端点对应一个授权 IP
+> 2. 每个端点独立监听，启动失败记录诊断；只有全部端点失败时整体网络服务才报失败
+> 3. `secure_lan`：单个 IP 绑定；`multi_lan`：每个授权 IP 一个端点
+> 4. 禁止 fallback 到 `0.0.0.0`；无可用授权网卡时启动失败并给出明确诊断
 
 ### 任务 010 — 聊天窗口与消息存储
 
@@ -171,18 +207,18 @@
 
 | 项 | 内容 |
 |---|---|
-| 目标 | 常规和网络设置 |
-| 涉及文件 | `src/ui/settings/SettingsPage.*` |
-| 验收标准 | 1. 可编辑昵称、下载目录。2. 可开关发现、修改端口。3. 修改即时生效。 |
+| 目标 | 常规和网络设置（含网络模式、授权网卡、CIDR 配置） |
+| 涉及文件 | `src/ui/settings/SettingsPage.*`、`src/platform/InterfaceEnumerator.*` |
+| 验收标准 | 1. 可编辑昵称、下载目录。2. 网络模式选择器：`secure_lan` / `multi_lan` / `compat_test` 三选一，默认 `secure_lan`。3. 授权网卡列表：显示 `InterfaceEnumerator` 结果，checkbox 勾选，虚拟网卡默认不勾选。4. 允许网段列表：可编辑的 CIDR 列表（默认取授权网卡所在 /24 或 /16）。5. 只读预览：当前监听地址（如 `192.168.10.25:8787`）、当前发现范围（如 `192.168.10.0/24`）。6. 手动连接历史：显示 `manual_peers` 列表及最后成功时间。7. `compat_test` 风险提示：切换到此模式时显示黄色警告"此模式会扩大端口暴露面，不建议正式内网使用"。8. 可开关发现、修改端口。9. 修改即时生效（网络模式切换后自动重启相关服务）。 |
 | 禁止 | — |
 
 ### 任务 017 — 网络诊断页
 
 | 项 | 内容 |
 |---|---|
-| 目标 | 自助网络诊断工具 |
+| 目标 | 自助网络诊断工具（按 [14_network_model.md](./14_network_model.md) §8.3 完整规格） |
 | 涉及文件 | `src/ui/diagnostics/DiagnosticsPage.*`、`src/core/DiagnosticsService.*` |
-| 验收标准 | 1. 显示本机 IP、端口、防火墙状态。2. UDP 广播测试。3. 在线设备数。4. 每项有通过/失败标识。 |
+| 验收标准 | 1. 显示当前网络模式、授权网卡列表、当前监听地址（每端点一个）、当前发现接口。2. 显示允许 CIDR、被排除网卡及排除原因（策略不允许 / 未连接 / 虚拟网卡默认禁用）。3. TCP 端口监听结果（每端点独立测试）。4. UDP 发现端口结果（每授权接口独立测试）。5. 防火墙建议（Windows: 检测 Defender 规则，给出建议的 `New-NetFirewallRule` 命令）。6. 最近一次手动连接探测结果、最近一次发现报文收发结果。7. 每项诊断区分原因：未实现 / 策略不允许 / 防火墙阻止 / 对端未监听 / 对端未完成信任。8. 每项有通过/失败标识。 |
 | 禁止 | — |
 
 ---
