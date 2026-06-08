@@ -5,6 +5,13 @@ project(FengSui VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 源文件统一按 UTF-8 读取，允许直接书写中文 UI 文案
+if(MSVC)
+    add_compile_options(/utf-8)
+else()
+    add_compile_options(-finput-charset=UTF-8)
+endif()
+
 # Qt 自动处理 MOC/UIC/RCC
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)

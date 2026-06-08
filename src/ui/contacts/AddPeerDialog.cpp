@@ -38,7 +38,7 @@ PeerInfo AddPeerDialog::resultPeer() const
 
 void AddPeerDialog::setupUi()
 {
-    setWindowTitle(QString::fromUtf8("添加设备"));
+    setWindowTitle(QStringLiteral("添加设备"));
     setFixedSize(kDefaultWidth, kDefaultHeight);
 
     auto* layout = new QVBoxLayout(this);
@@ -47,19 +47,19 @@ void AddPeerDialog::setupUi()
 
     // IP 地址行
     auto* ipRow = new QHBoxLayout();
-    auto* ipLabel = new QLabel(QString::fromUtf8("IP 地址"), this);
+    auto* ipLabel = new QLabel(QStringLiteral("IP 地址"), this);
     ipLabel->setFixedWidth(60);
     m_ipEdit = new QLineEdit(this);
-    m_ipEdit->setPlaceholderText(QString::fromUtf8("例如 192.168.1.100"));
+    m_ipEdit->setPlaceholderText(QStringLiteral("例如 192.168.1.100"));
     ipRow->addWidget(ipLabel);
     ipRow->addWidget(m_ipEdit, 1);
 
     // 端口行
     auto* portRow = new QHBoxLayout();
-    auto* portLabel = new QLabel(QString::fromUtf8("端口"), this);
+    auto* portLabel = new QLabel(QStringLiteral("端口"), this);
     portLabel->setFixedWidth(60);
     m_portEdit = new QLineEdit(this);
-    m_portEdit->setPlaceholderText(QString::fromUtf8("8787"));
+    m_portEdit->setPlaceholderText(QStringLiteral("8787"));
     m_portEdit->setText(QString::number(m_defaultPort));
     portRow->addWidget(portLabel);
     portRow->addWidget(m_portEdit, 1);
@@ -73,7 +73,7 @@ void AddPeerDialog::setupUi()
     // 按钮
     auto* btnRow = new QHBoxLayout();
     btnRow->addStretch();
-    m_connectBtn = new QPushButton(QString::fromUtf8("连接"), this);
+    m_connectBtn = new QPushButton(QStringLiteral("连接"), this);
     m_connectBtn->setDefault(true);
     m_connectBtn->setStyleSheet(
         "QPushButton {"
@@ -83,7 +83,7 @@ void AddPeerDialog::setupUi()
         "QPushButton:hover { background-color: #357abd; }"
         "QPushButton:disabled { background-color: #aaa; }"
     );
-    m_cancelBtn = new QPushButton(QString::fromUtf8("取消"), this);
+    m_cancelBtn = new QPushButton(QStringLiteral("取消"), this);
     m_cancelBtn->setStyleSheet(
         "QPushButton {"
         "  border: 1px solid #ccc; border-radius: 4px;"
@@ -108,26 +108,26 @@ bool AddPeerDialog::validateInput(QString& errorOut) const
 {
     const QString ip = m_ipEdit->text().trimmed();
     if (ip.isEmpty()) {
-        errorOut = QString::fromUtf8("请输入 IP 地址");
+        errorOut = QStringLiteral("请输入 IP 地址");
         return false;
     }
 
     QHostAddress addr(ip);
     if (addr.isNull() || addr.protocol() != QAbstractSocket::IPv4Protocol) {
-        errorOut = QString::fromUtf8("IP 地址格式无效");
+        errorOut = QStringLiteral("IP 地址格式无效");
         return false;
     }
 
     const QString portText = m_portEdit->text().trimmed();
     if (portText.isEmpty()) {
-        errorOut = QString::fromUtf8("请输入端口号");
+        errorOut = QStringLiteral("请输入端口号");
         return false;
     }
 
     bool portOk = false;
     const int port = portText.toInt(&portOk);
     if (!portOk || port < 1 || port > 65535) {
-        errorOut = QString::fromUtf8("端口号范围 1-65535");
+        errorOut = QStringLiteral("端口号范围 1-65535");
         return false;
     }
 
@@ -186,22 +186,22 @@ void AddPeerDialog::onConnectClicked()
 
     // 自连接检测
     if (isSelfConnection(ip, port)) {
-        m_statusLabel->setText(QString::fromUtf8("不能连接本机地址"));
+        m_statusLabel->setText(QStringLiteral("不能连接本机地址"));
         m_statusLabel->setStyleSheet("padding-left: 4px; color: #cc0000;");
         return;
     }
 
     // 禁用输入，开始探测
     setInputsEnabled(false);
-    m_statusLabel->setText(QString::fromUtf8("正在连接..."));
+    m_statusLabel->setText(QStringLiteral("正在连接..."));
     m_statusLabel->setStyleSheet("padding-left: 4px; color: #333;");
 
     QString probeError;
     if (TcpProbe::probe(ip, port, kProbeTimeoutMs, probeError)) {
         // 探测成功，构造 PeerInfo
-        m_resultPeer.peerId = QString::fromUtf8("manual:%1:%2").arg(ip).arg(port);
-        m_resultPeer.displayName = QString::fromUtf8("%1:%2").arg(ip).arg(port);
-        m_resultPeer.deviceName = QString::fromUtf8("手动添加");
+        m_resultPeer.peerId = QStringLiteral("manual:%1:%2").arg(ip).arg(port);
+        m_resultPeer.displayName = QStringLiteral("%1:%2").arg(ip).arg(port);
+        m_resultPeer.deviceName = QStringLiteral("手动添加");
         m_resultPeer.ip = ip;
         m_resultPeer.port = port;
         m_resultPeer.online = true;

@@ -34,7 +34,7 @@ bool TcpProbe::probe(const QString& host, quint16 port, int timeoutMs, QString& 
     });
 
     QObject::connect(&timer, &QTimer::timeout, [&]() {
-        errorOut = QString::fromUtf8("连接超时");
+        errorOut = QStringLiteral("连接超时");
         loop.quit();
     });
 

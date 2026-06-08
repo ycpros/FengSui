@@ -14,11 +14,11 @@ TransferCenterPage::TransferCenterPage(QWidget* parent)
     auto* layout = new QVBoxLayout(this);
 
     // 页面标题
-    auto* titleLabel = new QLabel(QString::fromUtf8("\xe4\xbc\xa0\xe8\xbe\x93\xe4\xb8\xad\xe5\xbf\x83"), this);  // 传输中心
+    auto* titleLabel = new QLabel(QStringLiteral("传输中心"), this);
     titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; padding: 12px;");
 
     // 空态提示
-    auto* emptyLabel = new QLabel(QString::fromUtf8("\xe6\x9a\x82\xe6\x97\xa0\xe4\xbc\xa0\xe8\xbe\x93\xe4\xbb\xbb\xe5\x8a\xa1"), this);  // 暂无传输任务
+    auto* emptyLabel = new QLabel(QStringLiteral("暂无传输任务"), this);
     emptyLabel->setAlignment(Qt::AlignCenter);
     emptyLabel->setStyleSheet("color: #999; font-size: 14px;");
 

@@ -60,10 +60,10 @@ void ChatPage::openConversation(const PeerInfo& peer)
     // 更新头部信息
     m_peerNameLabel->setText(peer.displayName.isEmpty() ? peer.peerId : peer.displayName);
     if (peer.online) {
-        m_peerStatusLabel->setText(QStringLiteral("\xe5\x9c\xa8\xe7\xba\xbf"));  // 在线
+        m_peerStatusLabel->setText(QStringLiteral("在线"));
         m_peerStatusLabel->setStyleSheet("color: #187a3b; font-size: 12px;");
     } else {
-        m_peerStatusLabel->setText(QStringLiteral("\xe7\xa6\xbb\xe7\xba\xbf"));  // 离线
+        m_peerStatusLabel->setText(QStringLiteral("离线"));
         m_peerStatusLabel->setStyleSheet("color: #999; font-size: 12px;");
     }
 
@@ -229,7 +229,7 @@ void ChatPage::setupUi()
     leftLayout->setSpacing(0);
 
     // 标题
-    auto* titleLabel = new QLabel(QStringLiteral("\xe6\xb6\x88\xe6\x81\xaf"), leftPanel);  // 消息
+    auto* titleLabel = new QLabel(QStringLiteral("消息"), leftPanel);
     titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; padding: 12px;");
 
     // 会话列表
@@ -253,7 +253,7 @@ void ChatPage::setupUi()
 
     // 空态提示
     m_emptyConvLabel = new QLabel(
-        QStringLiteral("\xe6\x9a\x82\xe6\x97\xa0\xe4\xbc\x9a\xe8\xaf\x9d"),  // 暂无会话
+        QStringLiteral("暂无会话"),
         leftPanel);
     m_emptyConvLabel->setAlignment(Qt::AlignCenter);
     m_emptyConvLabel->setStyleSheet("color: #999; font-size: 14px; padding: 40px;");
@@ -269,7 +269,7 @@ void ChatPage::setupUi()
 
     // 页面 0：空态
     m_emptyChatLabel = new QLabel(
-        QStringLiteral("\xe9\x80\x89\xe6\x8b\xa9\xe4\xb8\x80\xe4\xb8\xaa\xe4\xbc\x9a\xe8\xaf\x9d\xe5\xbc\x80\xe5\xa7\x8b\xe8\x81\x8a\xe5\xa4\xa9"),  // 选择一个会话开始聊天
+        QStringLiteral("选择一个会话开始聊天"),
         m_chatStack);
     m_emptyChatLabel->setAlignment(Qt::AlignCenter);
     m_emptyChatLabel->setStyleSheet("color: #999; font-size: 14px;");
@@ -320,7 +320,7 @@ void ChatPage::setupUi()
 
     m_inputEdit = new QTextEdit(inputBar);
     m_inputEdit->setPlaceholderText(
-        QStringLiteral("\xe8\xbe\x93\xe5\x85\xa5\xe6\xb6\x88\xe6\x81\xaf..."));  // 输入消息...
+        QStringLiteral("输入消息..."));
     m_inputEdit->setMinimumHeight(36);
     m_inputEdit->setMaximumHeight(100);
     m_inputEdit->setStyleSheet("border: 1px solid #ddd; border-radius: 4px; padding: 6px; font-size: 14px;");
@@ -328,7 +328,7 @@ void ChatPage::setupUi()
     m_inputEdit->installEventFilter(this);
 
     m_sendBtn = new QPushButton(
-        QStringLiteral("\xe5\x8f\x91\xe9\x80\x81"), inputBar);  // 发送
+        QStringLiteral("发送"), inputBar);
     m_sendBtn->setFixedSize(72, 36);
     m_sendBtn->setEnabled(false);
     m_sendBtn->setStyleSheet(
@@ -421,10 +421,10 @@ QWidget* ChatPage::createMessageBubble(const Message& message)
     if (isMine) {
         // 状态指示器
         switch (message.status) {
-        case MessageStatus::Sending:   metaText += QStringLiteral(" \xe2\x8f\xb3"); break;   // ⏳
-        case MessageStatus::Sent:      metaText += QStringLiteral(" \xe2\x9c\x93"); break;     // ✓
-        case MessageStatus::Delivered: metaText += QStringLiteral(" \xe2\x9c\x93\xe2\x9c\x93"); break; // ✓✓
-        case MessageStatus::Failed:    metaText += QStringLiteral(" \xe2\x9c\x97"); break;     // ✗
+        case MessageStatus::Sending:   metaText += QStringLiteral(" ⏳"); break;
+        case MessageStatus::Sent:      metaText += QStringLiteral(" ✓"); break;
+        case MessageStatus::Delivered: metaText += QStringLiteral(" ✓✓"); break;
+        case MessageStatus::Failed:    metaText += QStringLiteral(" ✗"); break;
         }
     }
     auto* metaLabel = new QLabel(metaText, innerWidget);
@@ -514,10 +514,10 @@ void ChatPage::updateMessageStatusInBubble(const QString& messageId, MessageStat
 
     QString indicator;
     switch (status) {
-    case MessageStatus::Sending:   indicator = QStringLiteral(" \xe2\x8f\xb3"); break;      // ⏳
-    case MessageStatus::Sent:      indicator = QStringLiteral(" \xe2\x9c\x93"); break;        // ✓
-    case MessageStatus::Delivered: indicator = QStringLiteral(" \xe2\x9c\x93\xe2\x9c\x93"); break; // ✓✓
-    case MessageStatus::Failed:    indicator = QStringLiteral(" \xe2\x9c\x97"); break;        // ✗
+    case MessageStatus::Sending:   indicator = QStringLiteral(" ⏳"); break;
+    case MessageStatus::Sent:      indicator = QStringLiteral(" ✓"); break;
+    case MessageStatus::Delivered: indicator = QStringLiteral(" ✓✓"); break;
+    case MessageStatus::Failed:    indicator = QStringLiteral(" ✗"); break;
     }
 
     metaLabel->setText(timePart + indicator);

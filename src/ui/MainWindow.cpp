@@ -19,21 +19,21 @@ namespace FengSui {
 
 // 导航项定义：显示名称 + 对应的页面索引
 static const struct {
-    const char* label;
-    int         pageIndex;
+    QString label;
+    int     pageIndex;
 } kNavItems[] = {
-    { "\xe6\xb6\x88\xe6\x81\xaf", 0 },       // 消息
-    { "\xe8\x81\x94\xe7\xb3\xbb\xe4\xba\xba", 1 }, // 联系人
-    { "\xe4\xbc\xa0\xe8\xbe\x93\xe4\xb8\xad\xe5\xbf\x83", 2 }, // 传输中心
-    { "\xe5\x85\xb1\xe4\xba\xab\xe6\x96\x87\xe4\xbb\xb6", 3 }, // 共享文件
-    { "\xe8\xae\xbe\xe7\xbd\xae", 4 },       // 设置
+    { QStringLiteral("消息"), 0 },
+    { QStringLiteral("联系人"), 1 },
+    { QStringLiteral("传输中心"), 2 },
+    { QStringLiteral("共享文件"), 3 },
+    { QStringLiteral("设置"), 4 },
 };
 
 MainWindow::MainWindow(Application* app, QWidget* parent)
     : QMainWindow(parent)
     , m_app(app)
 {
-    setWindowTitle(QString::fromUtf8("\xe7\x83\xbd\xe7\x87\xa7 FengSui"));
+    setWindowTitle(QStringLiteral("烽燧 FengSui"));
     setMinimumSize(900, 600);
     resize(1100, 720);
 
@@ -117,7 +117,7 @@ void MainWindow::createNavBar()
 
     // 添加 5 个导航项
     for (const auto& nav : kNavItems) {
-        auto* item = new QListWidgetItem(QString::fromUtf8(nav.label), m_navList);
+        auto* item = new QListWidgetItem(nav.label, m_navList);
         item->setData(Qt::UserRole, nav.pageIndex);  // 存储页面索引
         // 设置导航项高度
         item->setSizeHint(QSize(0, 48));

@@ -75,10 +75,10 @@ void ContactsPage::setupUi()
     auto* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(12, 8, 12, 8);
 
-    auto* titleLabel = new QLabel(QString::fromUtf8("\xe8\x81\x94\xe7\xb3\xbb\xe4\xba\xba"), header);
+    auto* titleLabel = new QLabel(QStringLiteral("联系人"), header);
     titleLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
 
-    m_addBtn = new QPushButton(QString::fromUtf8("+ \xe6\xb7\xbb\xe5\x8a\xa0\xe8\xae\xbe\xe5\xa4\x87"), header);
+    m_addBtn = new QPushButton(QStringLiteral("+ 添加设备"), header);
     m_addBtn->setFixedHeight(32);
     m_addBtn->setStyleSheet(
         "QPushButton {"
@@ -111,7 +111,7 @@ void ContactsPage::setupUi()
             this,
             &ContactsPage::onItemDoubleClicked);
 
-    m_emptyLabel = new QLabel(QString::fromUtf8("\xe6\x9a\x82\xe6\x97\xa0\xe5\x9c\xa8\xe7\xba\xbf\xe8\xae\xbe\xe5\xa4\x87"), this);
+    m_emptyLabel = new QLabel(QStringLiteral("暂无在线设备"), this);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
     m_emptyLabel->setStyleSheet("color: #999; font-size: 14px;");
 
@@ -206,7 +206,7 @@ QWidget* ContactsPage::createPeerRow(const PeerInfo& peer)
     auto* nameLabel = new QLabel(peer.displayName, textContainer);
     nameLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #222;");
 
-    const QString detailText = QString::fromUtf8("%1  %2")
+    const QString detailText = QStringLiteral("%1  %2")
                                    .arg(peer.deviceName, endpointText(peer));
     auto* detailLabel = new QLabel(detailText, textContainer);
     detailLabel->setStyleSheet("font-size: 12px; color: #666;");
@@ -214,7 +214,7 @@ QWidget* ContactsPage::createPeerRow(const PeerInfo& peer)
     textLayout->addWidget(nameLabel);
     textLayout->addWidget(detailLabel);
 
-    auto* statusLabel = new QLabel(QString::fromUtf8("\xe5\x9c\xa8\xe7\xba\xbf"), row);
+    auto* statusLabel = new QLabel(QStringLiteral("在线"), row);
     statusLabel->setAlignment(Qt::AlignCenter);
     statusLabel->setStyleSheet(
         "color: #187a3b;"
@@ -278,8 +278,8 @@ void ContactsPage::onAddClicked()
     // 检查是否已存在相同 IP:端口
     if (hasPeerAtEndpoint(peer.ip, peer.port)) {
         QMessageBox::information(this,
-                                 QString::fromUtf8("添加设备"),
-                                 QString::fromUtf8("该设备已在列表中"));
+                                 QStringLiteral("添加设备"),
+                                 QStringLiteral("该设备已在列表中"));
         return;
     }
 
