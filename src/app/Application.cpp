@@ -9,13 +9,80 @@
 #include "core/SignalService.h"
 #include "storage/ConversationRepository.h"
 #include "storage/Database.h"
+#include "storage/ManualPeerRepository.h"
 #include "storage/MessageRepository.h"
 #include "storage/SettingsRepository.h"
 #include "storage/TransferRepository.h"
+#include "models/NetworkPolicy.h"
+#include "platform/InterfaceEnumerator.h"
 
 #include <QMetaType>
+#include <QSet>
+#include <QStringList>
 
 namespace FengSui {
+
+namespace {
+
+QStringList splitCsvSetting(const QString& value)
+{
+    QStringList result;
+    const QStringList parts = value.split(QStringLiteral(","),
+                                          Qt::SkipEmptyParts);
+    for (const QString& part : parts) {
+        const QString trimmed = part.trimmed();
+        if (!trimmed.isEmpty() && !result.contains(trimmed)) {
+            result.append(trimmed);
+        }
+    }
+    return result;
+}
+
+QSet<QString> toSet(const QStringList& values)
+{
+    QSet<QString> result;
+    for (const QString& value : values) {
+        if (!value.trimmed().isEmpty()) {
+            result.insert(value.trimmed());
+        }
+    }
+    return result;
+}
+
+QStringList cidrsForSelectedInterfaces(const QStringList& selectedIds)
+{
+    QStringList cidrs;
+    const QSet<QString> selected = toSet(selectedIds);
+    if (selected.isEmpty()) {
+        return cidrs;
+    }
+
+    const QList<NetworkInterfaceInfo> interfaces = InterfaceEnumerator::enumerate();
+    for (const NetworkInterfaceInfo& iface : interfaces) {
+        if (!selected.contains(iface.id)) {
+            continue;
+        }
+        const QString cidr = iface.cidr();
+        if (NetworkPolicy::isValidCidr(cidr) && !cidrs.contains(cidr)) {
+            cidrs.append(cidr);
+        }
+    }
+    return cidrs;
+}
+
+QStringList validCidrs(const QStringList& cidrs)
+{
+    QStringList result;
+    for (const QString& cidr : cidrs) {
+        const QString trimmed = cidr.trimmed();
+        if (NetworkPolicy::isValidCidr(trimmed) && !result.contains(trimmed)) {
+            result.append(trimmed);
+        }
+    }
+    return result;
+}
+
+} // namespace
 
 Application::Application(int& argc, char** argv)
     : QApplication(argc, argv)
@@ -45,6 +112,9 @@ Application::~Application()
     delete m_transferRepo;
     m_transferRepo = nullptr;
 
+    delete m_manualPeerRepo;
+    m_manualPeerRepo = nullptr;
+
     delete m_settings;
     m_settings = nullptr;
 
@@ -53,6 +123,9 @@ Application::~Application()
 
     delete m_database;
     m_database = nullptr;
+
+    delete m_networkPolicy;
+    m_networkPolicy = nullptr;
 }
 
 bool Application::initialize()
@@ -78,13 +151,17 @@ bool Application::initialize()
         qWarning() << "Failed to load settings, using defaults";
     }
 
-    // 5. 创建局域网发现服务。是否启动由 main() 在首次向导完成后决定。
-    m_beaconService = new BeaconService(m_settings, this);
+    // 5. 构建运行时网络策略。首次无配置时会选择主物理网卡。
+    m_networkPolicy = new NetworkPolicy();
+    reloadNetworkPolicyFromSettings();
 
-    // 6. 创建 TCP 消息服务。是否启动由 main() 在首次向导完成后决定。
-    m_signalService = new SignalService(m_settings, this);
+    // 6. 创建局域网发现服务。是否启动由 main() 在首次向导完成后决定。
+    m_beaconService = new BeaconService(m_settings, m_networkPolicy, this);
 
-    // 7. 创建消息存储仓库，注入到 SignalService 以实现消息持久化
+    // 7. 创建 TCP 消息服务。是否启动由 main() 在首次向导完成后决定。
+    m_signalService = new SignalService(m_settings, m_networkPolicy, this);
+
+    // 8. 创建消息存储仓库，注入到 SignalService 以实现消息持久化
     m_conversationRepo = new ConversationRepository(m_database,
                                                      m_settings->peerId(),
                                                      this);
@@ -92,17 +169,18 @@ bool Application::initialize()
     m_signalService->setConversationRepository(m_conversationRepo);
     m_signalService->setMessageRepository(m_messageRepo);
 
-    // 8. 创建传输任务存储仓库
+    // 9. 创建手动添加设备仓库和传输任务存储仓库
+    m_manualPeerRepo = new ManualPeerRepository(m_database, this);
     m_transferRepo = new TransferRepository(m_database, this);
 
-    // 9. 创建文件传输编排服务，注入依赖
+    // 10. 创建文件传输编排服务，注入依赖
     m_courierService = new CourierService(this);
     m_courierService->setSignalService(m_signalService);
     m_courierService->setTransferRepository(m_transferRepo);
     m_courierService->setLocalPeerId(m_settings->peerId());
     m_signalService->setCourierService(m_courierService);
 
-    // 10. 注册元类型，使模型结构体可通过 Qt signal/slot 跨线程传递
+    // 11. 注册元类型，使模型结构体可通过 Qt signal/slot 跨线程传递
     qRegisterMetaType<FengSui::Message>("FengSui::Message");
     qRegisterMetaType<FengSui::Conversation>("FengSui::Conversation");
     qRegisterMetaType<FengSui::TransferTask>("FengSui::TransferTask");
@@ -210,9 +288,69 @@ CourierService* Application::courierService() const
     return m_courierService;
 }
 
+NetworkPolicy* Application::networkPolicy() const
+{
+    return m_networkPolicy;
+}
+
+void Application::reloadNetworkPolicyFromSettings()
+{
+    if (!m_networkPolicy) {
+        m_networkPolicy = new NetworkPolicy();
+    }
+    if (!m_settings) {
+        return;
+    }
+
+    const NetworkMode mode =
+        NetworkPolicy::modeFromString(m_settings->networkMode());
+    QStringList selectedIds = splitCsvSetting(m_settings->selectedInterfaces());
+    QStringList cidrs = validCidrs(splitCsvSetting(m_settings->allowedCidrs()));
+
+    bool shouldPersist = false;
+    const QList<NetworkInterfaceInfo> candidates = InterfaceEnumerator::candidates();
+
+    // 首次启动或旧配置为空时，默认选择主物理候选网卡。
+    if (selectedIds.isEmpty() && !candidates.isEmpty()) {
+        selectedIds.append(candidates.first().id);
+        shouldPersist = true;
+    }
+
+    if (cidrs.isEmpty()) {
+        cidrs = cidrsForSelectedInterfaces(selectedIds);
+        if (cidrs.isEmpty() && !candidates.isEmpty()) {
+            const QString candidateCidr = candidates.first().cidr();
+            if (NetworkPolicy::isValidCidr(candidateCidr)) {
+                cidrs.append(candidateCidr);
+            }
+        }
+        shouldPersist = !cidrs.isEmpty();
+    }
+
+    m_networkPolicy->setMode(mode);
+    m_networkPolicy->setSelectedInterfaces(toSet(selectedIds));
+    m_networkPolicy->setAllowedCidrs(cidrs);
+
+    const QString normalizedMode = NetworkPolicy::modeToString(mode);
+    if (m_settings->networkMode() != normalizedMode) {
+        if (m_settings->onboardingCompleted()) {
+            m_settings->setNetworkMode(normalizedMode);
+        }
+    }
+    if (shouldPersist && m_settings->onboardingCompleted()) {
+        m_settings->setSelectedInterfaces(selectedIds.join(QStringLiteral(",")));
+        m_settings->setAllowedCidrs(cidrs.join(QStringLiteral(",")));
+    }
+}
+
 TransferRepository* Application::transferRepository() const
 {
     return m_transferRepo;
+}
+
+ManualPeerRepository* Application::manualPeerRepository() const
+{
+    return m_manualPeerRepo;
 }
 
 } // namespace FengSui

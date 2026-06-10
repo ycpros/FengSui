@@ -4,7 +4,10 @@
 
 #pragma once
 
+#include "models/NetworkPolicy.h"
+
 #include <QHostAddress>
+#include <QList>
 #include <QObject>
 #include <QString>
 
@@ -44,6 +47,10 @@ public:
     // 线程安全性：仅在对象所属线程调用。
     bool start(const QHostAddress& bindAddress, quint16 port, QString& errorOut);
 
+    // 按网络策略生成的多个端点启动监听。
+    // 至少一个端点成功即返回 true；所有端点失败才返回 false。
+    bool start(const QList<BindEndpoint>& endpoints, QString& errorOut);
+
     // 停止监听并关闭所有活动连接。
     // 线程安全性：仅在对象所属线程调用。
     void stop();
@@ -53,6 +60,8 @@ public:
 
     // 返回当前绑定的端口号。
     quint16 port() const;
+
+    QList<BindEndpoint> boundEndpoints() const;
 
 signals:
     // 有新入站连接建立。
@@ -67,8 +76,8 @@ private slots:
     void onNewConnection();
 
 private:
-    QTcpServer* m_server = nullptr;
-    QHostAddress m_bindAddress;
+    QList<QTcpServer*> m_servers;
+    QList<BindEndpoint> m_boundEndpoints;
     quint16 m_port = 0;
     bool m_running = false;
 };

@@ -5,6 +5,7 @@
 
 #include <QAbstractItemView>
 #include <QDateTime>
+#include <QDebug>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -16,6 +17,7 @@
 #include <QWidget>
 
 #include "core/BeaconService.h"
+#include "storage/ManualPeerRepository.h"
 #include "ui/contacts/AddPeerDialog.h"
 
 namespace FengSui {
@@ -27,9 +29,14 @@ constexpr int kPeerRowHeight = 76;
 
 } // namespace
 
-ContactsPage::ContactsPage(BeaconService* beaconService, QWidget* parent)
+ContactsPage::ContactsPage(BeaconService* beaconService,
+                           NetworkPolicy* networkPolicy,
+                           ManualPeerRepository* manualPeerRepository,
+                           QWidget* parent)
     : QWidget(parent)
     , m_beaconService(beaconService)
+    , m_networkPolicy(networkPolicy)
+    , m_manualPeerRepository(manualPeerRepository)
 {
     setupUi();
     connectBeaconService();
@@ -39,6 +46,12 @@ ContactsPage::ContactsPage(BeaconService* beaconService, QWidget* parent)
 void ContactsPage::onPeerOnline(PeerInfo peer)
 {
     if (peer.peerId.trimmed().isEmpty() || !peer.online) {
+        return;
+    }
+    if (!peer.peerId.startsWith(QStringLiteral("manual:"))
+        && hasManualPeerAtEndpoint(peer.ip, peer.port)) {
+        qInfo() << "Ignoring auto-discovered peer because manual peer owns endpoint:"
+                << peer.ip << peer.port;
         return;
     }
 
@@ -264,10 +277,39 @@ bool ContactsPage::hasPeerAtEndpoint(const QString& ip, quint16 port) const
     return false;
 }
 
+bool ContactsPage::hasManualPeerAtEndpoint(const QString& ip, quint16 port) const
+{
+    for (const PeerInfo& peer : m_onlinePeers) {
+        if (peer.peerId.startsWith(QStringLiteral("manual:"))
+            && peer.ip == ip
+            && peer.port == port) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ContactsPage::persistManualPeer(const PeerInfo& peer)
+{
+    if (!m_manualPeerRepository
+        || !peer.peerId.startsWith(QStringLiteral("manual:"))) {
+        return;
+    }
+
+    ManualPeer manualPeer;
+    manualPeer.name = peer.displayName;
+    manualPeer.host = peer.ip;
+    manualPeer.port = peer.port;
+    manualPeer.lastSuccessAt = peer.lastSeenAt.isValid()
+        ? peer.lastSeenAt
+        : QDateTime::currentDateTimeUtc();
+    m_manualPeerRepository->upsertManualPeer(manualPeer);
+}
+
 void ContactsPage::onAddClicked()
 {
     constexpr quint16 kDefaultTcpPort = 8787;
-    AddPeerDialog dialog(kDefaultTcpPort, this);
+    AddPeerDialog dialog(kDefaultTcpPort, m_networkPolicy, this);
 
     if (dialog.exec() != QDialog::Accepted) {
         return;
@@ -290,6 +332,7 @@ void ContactsPage::addManualPeerSlot(PeerInfo peer)
 {
     peer.online = true;
     peer.lastSeenAt = QDateTime::currentDateTimeUtc();
+    persistManualPeer(peer);
     upsertPeer(peer);
 }
 

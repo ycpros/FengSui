@@ -4,7 +4,9 @@
 #include "core/BeaconService.h"
 
 #include "app/AppSettings.h"
+#include "models/NetworkPolicy.h"
 #include "network/UdpDiscovery.h"
+#include "platform/InterfaceEnumerator.h"
 #include "platform/PlatformUtils.h"
 
 #include <QAbstractSocket>
@@ -12,8 +14,9 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QHostAddress>
+#include <QJsonArray>
 #include <QJsonObject>
-#include <QNetworkInterface>
+#include <QJsonValue>
 #include <QTimer>
 
 namespace FengSui {
@@ -32,34 +35,38 @@ constexpr int kTimeoutCheckIntervalMs = 1000;
 // hello 报文缺少端口时使用协议默认 TCP 监听端口。
 constexpr quint16 kDefaultTcpPort = 8787;
 
-// 选择第一个非回环 IPv4 作为广播里的可连接地址。
-// 返回值：找到网卡地址时返回 IPv4 字符串，否则返回空字符串。
-QString localIpv4Address()
-{
-    const QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
-    for (const QHostAddress& address : addresses) {
-        if (address.protocol() == QAbstractSocket::IPv4Protocol
-            && !address.isLoopback()) {
-            return address.toString();
-        }
-    }
-
-    return QString();
-}
-
-// 校验对端上报端口是否落在 TCP/UDP 合法端口范围内。
-// port: 对端 hello 报文里的 tcp_port。
-// 返回值：端口可用于连接时返回 true。
 bool isValidPort(int port)
 {
     return port > 0 && port <= 65535;
 }
 
+QList<NetworkInterfaceInfo> orderedInterfaces()
+{
+    QList<NetworkInterfaceInfo> ordered = InterfaceEnumerator::candidates();
+    const QList<NetworkInterfaceInfo> all = InterfaceEnumerator::enumerate();
+    for (const NetworkInterfaceInfo& iface : all) {
+        bool exists = false;
+        for (const NetworkInterfaceInfo& current : ordered) {
+            if (current.id == iface.id && current.ip == iface.ip) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            ordered.append(iface);
+        }
+    }
+    return ordered;
+}
+
 } // namespace
 
-BeaconService::BeaconService(AppSettings* settings, QObject* parent)
+BeaconService::BeaconService(AppSettings* settings,
+                             NetworkPolicy* networkPolicy,
+                             QObject* parent)
     : QObject(parent)
     , m_settings(settings)
+    , m_networkPolicy(networkPolicy)
     , m_discovery(new UdpDiscovery(this))
     , m_helloTimer(new QTimer(this))
     , m_timeoutTimer(new QTimer(this))
@@ -92,6 +99,11 @@ BeaconService::~BeaconService()
     stop();
 }
 
+void BeaconService::setNetworkPolicy(NetworkPolicy* networkPolicy)
+{
+    m_networkPolicy = networkPolicy;
+}
+
 bool BeaconService::start(QString& errorOut)
 {
     if (m_running) {
@@ -115,17 +127,20 @@ bool BeaconService::start(QString& errorOut)
         return false;
     }
 
-    if (!m_discovery->start(errorOut)) {
+    const QList<DiscoveryEndpoint> endpoints = buildDiscoveryEndpoints();
+    if (endpoints.isEmpty()) {
+        errorOut = QStringLiteral("No authorized discovery interfaces");
+        return false;
+    }
+
+    if (!m_discovery->start(endpoints, errorOut)) {
         return false;
     }
 
     m_running = true;
 
-    QString sendError;
     // 启动后立即发送 hello，让同网段设备不必等待下一次心跳周期。
-    if (!m_discovery->sendHello(buildHelloPayload(), sendError)) {
-        qWarning() << "Failed to send initial presence.hello:" << sendError;
-    }
+    sendHello();
 
     m_helloTimer->start();
     m_timeoutTimer->start();
@@ -172,24 +187,79 @@ QList<PeerInfo> BeaconService::peers() const
     return m_peers.values();
 }
 
-QJsonObject BeaconService::buildHelloPayload() const
+QJsonObject BeaconService::buildHelloPayload(const DiscoveryEndpoint& endpoint) const
 {
     // hello 承载完整设备摘要，heartbeat 只承载 peer_id。
     QJsonObject payload;
     payload.insert(QStringLiteral("peer_id"), m_localPeerId);
     payload.insert(QStringLiteral("display_name"), m_settings->displayName());
     payload.insert(QStringLiteral("device_name"), hostName());
-    payload.insert(QStringLiteral("ip"), localIpv4Address());
-    payload.insert(QStringLiteral("tcp_port"), static_cast<int>(m_settings->listenPort()));
+    payload.insert(QStringLiteral("ip"), endpoint.ip.toString());
+    payload.insert(QStringLiteral("tcp_port"), static_cast<int>(endpoint.tcpPort));
     payload.insert(QStringLiteral("os"), platformOs());
     payload.insert(QStringLiteral("share_enabled"), false);
     payload.insert(QStringLiteral("version"), QCoreApplication::applicationVersion());
+
+    QJsonObject address;
+    address.insert(QStringLiteral("ip"), endpoint.ip.toString());
+    address.insert(QStringLiteral("port"), static_cast<int>(endpoint.tcpPort));
+    address.insert(QStringLiteral("interface"), endpoint.interfaceName);
+    address.insert(QStringLiteral("scope"),
+                   m_networkPolicy
+                       ? NetworkPolicy::modeToString(m_networkPolicy->mode())
+                       : QStringLiteral("secure_lan"));
+    QJsonArray addresses;
+    addresses.append(address);
+    payload.insert(QStringLiteral("addresses"), addresses);
+
     return payload;
+}
+
+QList<DiscoveryEndpoint> BeaconService::buildDiscoveryEndpoints() const
+{
+    QList<DiscoveryEndpoint> endpoints;
+    if (!m_networkPolicy || !m_settings) {
+        return endpoints;
+    }
+
+    const QList<NetworkInterfaceInfo> interfaces = orderedInterfaces();
+    QList<InterfaceAddress> addresses;
+    for (const NetworkInterfaceInfo& iface : interfaces) {
+        InterfaceAddress address;
+        address.interfaceId = iface.id;
+        address.interfaceName = iface.name;
+        address.ip = iface.ip;
+        addresses.append(address);
+    }
+
+    const QList<BindEndpoint> bindEndpoints =
+        m_networkPolicy->getBindEndpoints(m_settings->listenPort(), addresses);
+    for (const BindEndpoint& bind : bindEndpoints) {
+        for (const NetworkInterfaceInfo& iface : interfaces) {
+            if (iface.id == bind.interfaceId && iface.ip == bind.ip) {
+                DiscoveryEndpoint endpoint;
+                endpoint.interfaceId = iface.id;
+                endpoint.interfaceName = iface.name;
+                endpoint.ip = iface.ip;
+                endpoint.prefixLength = iface.prefixLength;
+                endpoint.tcpPort = bind.port;
+                endpoints.append(endpoint);
+                break;
+            }
+        }
+    }
+    return endpoints;
 }
 
 void BeaconService::handleDatagram(const QJsonObject& message,
                                    const QHostAddress& senderAddress)
 {
+    if (!m_networkPolicy || !m_networkPolicy->isAddressAllowed(senderAddress)) {
+        qWarning() << "Ignoring presence datagram from unauthorized source:"
+                   << senderAddress.toString();
+        return;
+    }
+
     const QString type = message.value(QStringLiteral("type")).toString();
     if (type.isEmpty()) {
         qWarning() << "Invalid presence datagram: missing type";
@@ -226,12 +296,13 @@ void BeaconService::handleHello(const QJsonObject& message,
     peer.displayName = message.value(QStringLiteral("display_name")).toString(peerId);
     peer.deviceName = message.value(QStringLiteral("device_name")).toString(peerId);
 
-    const QString announcedIp = message.value(QStringLiteral("ip")).toString().trimmed();
-    // 对端未上报 IP 时，使用 UDP 源地址作为保底。
-    peer.ip = announcedIp.isEmpty() ? senderAddress.toString() : announcedIp;
-
-    const int port = message.value(QStringLiteral("tcp_port")).toInt(kDefaultTcpPort);
-    peer.port = isValidPort(port) ? static_cast<quint16>(port) : kDefaultTcpPort;
+    quint16 port = 0;
+    if (!selectAnnouncedEndpoint(message, senderAddress, peer.ip, port)) {
+        qWarning() << "Invalid presence.hello: no allowed announced endpoint"
+                   << peerId << senderAddress.toString();
+        return;
+    }
+    peer.port = port;
     peer.os = message.value(QStringLiteral("os")).toString();
     peer.online = true;
     peer.lastSeenAt = QDateTime::currentDateTimeUtc();
@@ -259,6 +330,59 @@ void BeaconService::handleHello(const QJsonObject& message,
     if (!wasOnline || infoChanged) {
         emit peerOnline(peer);
     }
+}
+
+bool BeaconService::selectAnnouncedEndpoint(const QJsonObject& message,
+                                            const QHostAddress& senderAddress,
+                                            QString& ipOut,
+                                            quint16& portOut) const
+{
+    if (!m_networkPolicy) {
+        return false;
+    }
+
+    const QJsonArray addresses =
+        message.value(QStringLiteral("addresses")).toArray();
+    for (const QJsonValue& value : addresses) {
+        const QJsonObject object = value.toObject();
+        const QString ip = object.value(QStringLiteral("ip")).toString().trimmed();
+        const int port = object.value(QStringLiteral("port"))
+                             .toInt(message.value(QStringLiteral("tcp_port"))
+                                        .toInt(kDefaultTcpPort));
+        const QHostAddress address(ip);
+        if (address.protocol() != QAbstractSocket::IPv4Protocol) {
+            continue;
+        }
+        if (!isValidPort(port)) {
+            continue;
+        }
+        if (!m_networkPolicy->isAddressAllowed(address)) {
+            continue;
+        }
+
+        ipOut = address.toString();
+        portOut = static_cast<quint16>(port);
+        return true;
+    }
+    if (!addresses.isEmpty()) {
+        return false;
+    }
+
+    const QString announcedIp =
+        message.value(QStringLiteral("ip")).toString().trimmed();
+    const QHostAddress address =
+        announcedIp.isEmpty() ? senderAddress : QHostAddress(announcedIp);
+    const int port = message.value(QStringLiteral("tcp_port")).toInt(kDefaultTcpPort);
+    if (address.protocol() != QAbstractSocket::IPv4Protocol || !isValidPort(port)) {
+        return false;
+    }
+    if (!m_networkPolicy->isAddressAllowed(address)) {
+        return false;
+    }
+
+    ipOut = address.toString();
+    portOut = static_cast<quint16>(port);
+    return true;
 }
 
 void BeaconService::handleHeartbeat(const QJsonObject& message)
@@ -310,8 +434,17 @@ void BeaconService::sendHello()
     }
 
     QString error;
-    if (!m_discovery->sendHello(buildHelloPayload(), error)) {
-        qWarning() << "Failed to send presence.hello:" << error;
+    for (const DiscoveryEndpoint& endpoint : m_discovery->discoveryEndpoints()) {
+        QString endpointError;
+        if (!m_discovery->sendHello(buildHelloPayload(endpoint),
+                                    endpoint,
+                                    endpointError)) {
+            error = endpointError;
+            qWarning() << "Failed to send presence.hello on"
+                       << endpoint.interfaceName
+                       << endpoint.ip.toString()
+                       << endpointError;
+        }
     }
 }
 

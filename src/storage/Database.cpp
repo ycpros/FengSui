@@ -216,6 +216,17 @@ bool Database::createTables()
                 value TEXT
             )
         )",
+
+        // 手动添加设备历史
+        R"(
+            CREATE TABLE IF NOT EXISTS manual_peers (
+                name            TEXT NOT NULL,
+                host            TEXT NOT NULL,
+                port            INTEGER NOT NULL,
+                last_success_at TEXT NOT NULL,
+                UNIQUE(host, port)
+            )
+        )",
     };
 
     QSqlQuery query(db);
@@ -236,6 +247,7 @@ bool Database::createTables()
         "CREATE INDEX IF NOT EXISTS idx_messages_transfer ON messages(transfer_id)",
         "CREATE INDEX IF NOT EXISTS idx_transfers_status ON transfer_tasks(status)",
         "CREATE INDEX IF NOT EXISTS idx_transfers_peer ON transfer_tasks(peer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_manual_peers_time ON manual_peers(last_success_at DESC)",
     };
 
     for (const QString& sql : indexes) {

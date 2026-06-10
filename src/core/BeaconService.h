@@ -5,6 +5,7 @@
 #pragma once
 
 #include "models/PeerInfo.h"
+#include "network/UdpDiscovery.h"
 
 #include <QHash>
 #include <QList>
@@ -18,7 +19,7 @@ class QTimer;
 namespace FengSui {
 
 class AppSettings;
-class UdpDiscovery;
+class NetworkPolicy;
 
 // BeaconService 负责 UDP 发现业务状态：本机身份、对端在线表和心跳超时。
 // 不直接操作界面或数据库，状态变化通过 Qt 信号通知外部。
@@ -31,7 +32,14 @@ public:
     // settings: 应用设置实例，提供 peer_id、昵称、监听端口和发现开关，生命周期必须长于本对象。
     // parent: Qt 父对象，用于资源释放。
     // 线程安全性：仅在主线程或同一 QObject 所属线程构造。
-    explicit BeaconService(AppSettings* settings, QObject* parent = nullptr);
+    explicit BeaconService(AppSettings* settings,
+                           NetworkPolicy* networkPolicy,
+                           QObject* parent = nullptr);
+
+    void setNetworkPolicy(NetworkPolicy* networkPolicy);
+
+    // 测试辅助：不启动 UDP socket 时设置本机 peer_id。
+    void setLocalPeerIdForTest(const QString& peerId) { m_localPeerId = peerId; }
 
     // 销毁局域网发现服务。
     // 析构时会调用 stop()，尽力广播离线消息并释放 UDP socket。
@@ -70,13 +78,20 @@ signals:
 
 private:
     // 构造本机 presence.hello 负载。
-    QJsonObject buildHelloPayload() const;
+    QJsonObject buildHelloPayload(const DiscoveryEndpoint& endpoint) const;
+
+    QList<DiscoveryEndpoint> buildDiscoveryEndpoints() const;
 
     // 处理 UDP 层收到的 JSON 报文。
     void handleDatagram(const QJsonObject& message, const QHostAddress& senderAddress);
 
     // 处理 presence.hello。
     void handleHello(const QJsonObject& message, const QHostAddress& senderAddress);
+
+    bool selectAnnouncedEndpoint(const QJsonObject& message,
+                                 const QHostAddress& senderAddress,
+                                 QString& ipOut,
+                                 quint16& portOut) const;
 
     // 处理 presence.heartbeat。
     void handleHeartbeat(const QJsonObject& message);
@@ -97,6 +112,7 @@ private:
     void markPeerOffline(const QString& peerId, const QString& reason);
 
     AppSettings* m_settings = nullptr;
+    NetworkPolicy* m_networkPolicy = nullptr;
     UdpDiscovery* m_discovery = nullptr;
     QTimer* m_helloTimer = nullptr;
     QTimer* m_timeoutTimer = nullptr;

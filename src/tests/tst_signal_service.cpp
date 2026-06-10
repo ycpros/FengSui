@@ -4,7 +4,9 @@
 #include "app/AppSettings.h"
 #include "core/SignalService.h"
 #include "models/Message.h"
+#include "models/NetworkPolicy.h"
 #include "models/PeerInfo.h"
+#include "network/TcpServer.h"
 #include "storage/ConversationRepository.h"
 #include "storage/Database.h"
 #include "storage/MessageRepository.h"
@@ -23,6 +25,9 @@ class SignalServiceTest : public QObject {
 
 private slots:
     void firstTextMessageIsQueuedDeliveredAndPersisted();
+    void tcpServerStartsWhenAtLeastOneEndpointBinds();
+    void tcpServerFailsWithNoEndpoints();
+    void signalServiceFailsWithoutAuthorizedPolicy();
 
 private:
     static quint16 reserveLocalPort();
@@ -139,6 +144,62 @@ void SignalServiceTest::firstTextMessageIsQueuedDeliveredAndPersisted()
     QVERIFY(storedPeerB.has_value());
     QCOMPARE(storedPeerB->ip, peerB.ip);
     QCOMPARE(storedPeerB->port, peerB.port);
+}
+
+void SignalServiceTest::tcpServerStartsWhenAtLeastOneEndpointBinds()
+{
+    const quint16 blockedPort = reserveLocalPort();
+    QVERIFY(blockedPort != 0);
+
+    QTcpServer blocker;
+    QVERIFY(blocker.listen(QHostAddress::LocalHost, blockedPort));
+
+    FengSui::BindEndpoint blocked;
+    blocked.interfaceId = QStringLiteral("lo-blocked");
+    blocked.interfaceName = QStringLiteral("Loopback blocked");
+    blocked.ip = QHostAddress::LocalHost;
+    blocked.port = blockedPort;
+
+    FengSui::BindEndpoint available;
+    available.interfaceId = QStringLiteral("lo-available");
+    available.interfaceName = QStringLiteral("Loopback available");
+    available.ip = QHostAddress::LocalHost;
+    available.port = 0;
+
+    FengSui::TcpServer server;
+    QString error;
+    QVERIFY2(server.start(QList<FengSui::BindEndpoint>{blocked, available}, error),
+             qPrintable(error));
+    QCOMPARE(server.boundEndpoints().size(), 1);
+    QCOMPARE(server.boundEndpoints().first().interfaceId,
+             QStringLiteral("lo-available"));
+    server.stop();
+}
+
+void SignalServiceTest::tcpServerFailsWithNoEndpoints()
+{
+    FengSui::TcpServer server;
+    QString error;
+    QVERIFY(!server.start(QList<FengSui::BindEndpoint>{}, error));
+    QVERIFY(!error.isEmpty());
+}
+
+void SignalServiceTest::signalServiceFailsWithoutAuthorizedPolicy()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    FengSui::Database database(tempDir.filePath(QStringLiteral("policy.db")));
+    QVERIFY(database.initialize());
+    FengSui::SettingsRepository settingsRepo(&database);
+    FengSui::AppSettings settings(&settingsRepo);
+    QVERIFY(settings.load());
+    settings.setPeerId(QStringLiteral("peer_policy"));
+
+    FengSui::SignalService service(&settings);
+    QString error;
+    QVERIFY(!service.start(error));
+    QVERIFY(error.contains(QStringLiteral("authorized")));
 }
 
 } // namespace

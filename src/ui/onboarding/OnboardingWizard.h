@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include "platform/InterfaceEnumerator.h"
+
+#include <QCheckBox>
+
 #include <QWizard>
 
 class QLineEdit;
@@ -17,7 +21,8 @@ class AppSettings;
 enum OnboardingPage {
     Page_Nickname  = 0,   // 第 1 步：设置昵称
     Page_Discovery = 1,   // 第 2 步：网络发现开关
-    Page_Download  = 2    // 第 3 步：默认下载目录
+    Page_Download   = 2,   // 第 3 步：默认下载目录
+    Page_Interfaces = 3    // 第 4 步：选择授权网卡
 };
 
 // 向导类：3 个 QWizardPage，完成后写入 AppSettings。
@@ -42,6 +47,9 @@ private:
     // 创建第 2 页：网络发现开关
     QWizardPage* createDiscoveryPage();
 
+    // 创建第 4 页：选择授权网卡
+    QWizardPage* createInterfacesPage();
+
     // 创建第 3 页：下载目录选择
     QWizardPage* createDownloadPage();
 
@@ -51,6 +59,10 @@ private:
     QLineEdit*  m_nicknameEdit = nullptr;
     QCheckBox*  m_discoveryCheck = nullptr;
     QLineEdit*  m_downloadPathEdit = nullptr;
+
+    // 第 4 步控件
+    QList<QCheckBox*>            m_ifaceChecks;   // 每个网卡的复选框
+    QList<NetworkInterfaceInfo>  m_ifaceInfos;    // 对应的网卡信息快照
 };
 
 } // namespace FengSui

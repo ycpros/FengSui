@@ -1,5 +1,5 @@
 // UdpDiscovery.cpp
-// UDP 发现实现：加入多播组，发送和接收 presence JSON 报文。
+// UDP 发现实现：监听 presence JSON 报文，并按授权接口发送 directed broadcast。
 
 #include "network/UdpDiscovery.h"
 
@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QtGlobal>
 #include <QUdpSocket>
 
 namespace FengSui {
@@ -16,8 +17,17 @@ namespace {
 // UDP 发现固定使用 8788 端口，对应 06_protocol.md。
 constexpr quint16 kDiscoveryPort = 8788;
 
-// 站点本地管理范围内的多播地址，避免依赖系统级 mDNS 服务。
-const QHostAddress kMulticastAddress(QStringLiteral("239.255.100.100"));
+QHostAddress broadcastAddress(const DiscoveryEndpoint& endpoint)
+{
+    if (endpoint.ip.protocol() != QAbstractSocket::IPv4Protocol) {
+        return QHostAddress();
+    }
+
+    const int prefix = qBound(0, endpoint.prefixLength, 32);
+    const quint32 mask = (prefix == 0) ? 0 : (0xFFFFFFFFu << (32 - prefix));
+    const quint32 ip = endpoint.ip.toIPv4Address();
+    return QHostAddress((ip & mask) | ~mask);
+}
 
 } // namespace
 
@@ -33,8 +43,17 @@ UdpDiscovery::~UdpDiscovery()
 
 bool UdpDiscovery::start(QString& errorOut)
 {
+    return start({}, errorOut);
+}
+
+bool UdpDiscovery::start(const QList<DiscoveryEndpoint>& endpoints, QString& errorOut)
+{
     if (m_running) {
         return true;
+    }
+    if (endpoints.isEmpty()) {
+        errorOut = QStringLiteral("No authorized discovery interfaces");
+        return false;
     }
 
     m_socket = new QUdpSocket(this);
@@ -51,22 +70,10 @@ bool UdpDiscovery::start(QString& errorOut)
         return false;
     }
 
-    // TTL=2 限制报文只在近邻网段传播，符合 MVP 的同网段边界。
-    m_socket->setSocketOption(QAbstractSocket::MulticastTtlOption, 2);
-
-    // 开启回环便于单机调试；BeaconService 会忽略本机 peer_id。
-    m_socket->setSocketOption(QAbstractSocket::MulticastLoopbackOption, 1);
-
-    // 加入多播组后才能接收同组其他客户端的发现报文。
-    if (!m_socket->joinMulticastGroup(kMulticastAddress)) {
-        errorOut = m_socket->errorString();
-        qWarning() << "Failed to join UDP discovery multicast group:" << errorOut;
-        stop();
-        return false;
-    }
-
+    m_endpoints = endpoints;
     m_running = true;
-    qInfo() << "UDP discovery started on" << kMulticastAddress.toString() << kDiscoveryPort;
+    qInfo() << "UDP discovery started on" << kDiscoveryPort
+            << "authorized interfaces:" << m_endpoints.size();
     return true;
 }
 
@@ -77,14 +84,10 @@ void UdpDiscovery::stop()
         return;
     }
 
-    // 先退出多播组再关闭 socket，减少系统保留组成员状态的概率。
-    if (m_running) {
-        m_socket->leaveMulticastGroup(kMulticastAddress);
-    }
-
     m_socket->close();
     m_socket->deleteLater();
     m_socket = nullptr;
+    m_endpoints.clear();
     m_running = false;
 }
 
@@ -93,11 +96,25 @@ bool UdpDiscovery::isRunning() const
     return m_running;
 }
 
+QList<DiscoveryEndpoint> UdpDiscovery::discoveryEndpoints() const
+{
+    return m_endpoints;
+}
+
 bool UdpDiscovery::sendHello(const QJsonObject& payload, QString& errorOut)
 {
     QJsonObject message = payload;
     message.insert(QStringLiteral("type"), QStringLiteral("presence.hello"));
     return sendMessage(message, errorOut);
+}
+
+bool UdpDiscovery::sendHello(const QJsonObject& payload,
+                             const DiscoveryEndpoint& endpoint,
+                             QString& errorOut)
+{
+    QJsonObject message = payload;
+    message.insert(QStringLiteral("type"), QStringLiteral("presence.hello"));
+    return sendMessageToEndpoint(message, endpoint, errorOut);
 }
 
 bool UdpDiscovery::sendHeartbeat(const QString& peerId, QString& errorOut)
@@ -167,17 +184,62 @@ bool UdpDiscovery::sendMessage(const QJsonObject& message, QString& errorOut)
         errorOut = QStringLiteral("UDP discovery socket is not running");
         return false;
     }
+    if (m_endpoints.isEmpty()) {
+        errorOut = QStringLiteral("No authorized discovery interfaces");
+        return false;
+    }
+
+    bool anySent = false;
+    QStringList errors;
+    for (const DiscoveryEndpoint& endpoint : m_endpoints) {
+        QString endpointError;
+        if (sendMessageToEndpoint(message, endpoint, endpointError)) {
+            anySent = true;
+        } else {
+            errors.append(QStringLiteral("%1 %2: %3")
+                              .arg(endpoint.interfaceName,
+                                   endpoint.ip.toString(),
+                                   endpointError));
+        }
+    }
+
+    if (!anySent) {
+        errorOut = errors.join(QStringLiteral("; "));
+        return false;
+    }
+
+    if (!errors.isEmpty()) {
+        qWarning() << "UDP discovery partial send failure:" << errors;
+    }
+    return true;
+}
+
+bool UdpDiscovery::sendMessageToEndpoint(const QJsonObject& message,
+                                         const DiscoveryEndpoint& endpoint,
+                                         QString& errorOut)
+{
+    if (!m_socket || !m_running) {
+        errorOut = QStringLiteral("UDP discovery socket is not running");
+        return false;
+    }
+
+    const QHostAddress target = broadcastAddress(endpoint);
+    if (target.isNull()) {
+        errorOut = QStringLiteral("Invalid discovery endpoint address");
+        return false;
+    }
 
     // 使用紧凑 JSON，降低广播报文体积并保持协议可读。
     const QByteArray payload = QJsonDocument(message).toJson(QJsonDocument::Compact);
-    const qint64 bytesWritten = m_socket->writeDatagram(payload, kMulticastAddress, kDiscoveryPort);
+    const qint64 bytesWritten = m_socket->writeDatagram(payload, target, kDiscoveryPort);
     if (bytesWritten != payload.size()) {
         errorOut = m_socket->errorString();
         if (errorOut.isEmpty()) {
             // Qt 可能只返回短写但没有 socket 错误，保留明确失败原因。
             errorOut = QStringLiteral("Failed to write full UDP discovery datagram");
         }
-        qWarning() << "Failed to send UDP discovery datagram:" << errorOut;
+        qWarning() << "Failed to send UDP discovery datagram to"
+                   << target.toString() << ":" << errorOut;
         return false;
     }
 

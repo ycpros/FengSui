@@ -30,6 +30,7 @@ set(SOURCES
     # storage 层
     src/storage/ConversationRepository.cpp
     src/storage/Database.cpp
+    src/storage/ManualPeerRepository.cpp
     src/storage/MessageRepository.cpp
     src/storage/SettingsRepository.cpp
     src/storage/TransferRepository.cpp
@@ -56,7 +57,9 @@ set(SOURCES
     src/network/TcpConnection.cpp
     src/network/TcpServer.cpp
     # platform 层
+    src/platform/InterfaceEnumerator.h
     src/platform/PlatformUtils.cpp
+    src/platform/InterfaceEnumerator.cpp
 )
 
 set(HEADERS
@@ -65,6 +68,7 @@ set(HEADERS
     src/app/Logger.h
     src/app/AppSettings.h
     # models（纯头文件）
+    src/models/NetworkPolicy.h
     src/models/PeerInfo.h
     src/models/Message.h
     src/models/Conversation.h
@@ -75,6 +79,7 @@ set(HEADERS
     # storage 层
     src/storage/ConversationRepository.h
     src/storage/Database.h
+    src/storage/ManualPeerRepository.h
     src/storage/MessageRepository.h
     src/storage/SettingsRepository.h
     src/storage/TransferRepository.h
@@ -101,6 +106,7 @@ set(HEADERS
     src/network/TcpConnection.h
     src/network/TcpServer.h
     # platform 层
+    src/platform/InterfaceEnumerator.h
     src/platform/PlatformUtils.h
 )
 
@@ -143,11 +149,17 @@ function(fengsui_add_qttest target_name)
     target_include_directories(${target_name} PRIVATE "${FENGSUI_SRC_DIR}")
     target_link_libraries(${target_name} PRIVATE
         Qt6::Test
+        Qt6::Widgets
         Qt6::Network
         Qt6::Sql
     )
     add_test(NAME ${target_name} COMMAND ${target_name})
 endfunction()
+
+fengsui_add_qttest(tst_network_policy
+    src/tests/tst_network_policy.cpp
+    src/platform/InterfaceEnumerator.cpp
+)
 
 fengsui_add_qttest(tst_protocol
     src/tests/tst_protocol.cpp
@@ -158,6 +170,7 @@ fengsui_add_qttest(tst_storage
     src/tests/tst_storage.cpp
     src/storage/ConversationRepository.cpp
     src/storage/Database.cpp
+    src/storage/ManualPeerRepository.cpp
     src/storage/MessageRepository.cpp
 )
 
@@ -169,9 +182,27 @@ fengsui_add_qttest(tst_signal_service
     src/network/Protocol.cpp
     src/network/TcpConnection.cpp
     src/network/TcpServer.cpp
+    src/platform/InterfaceEnumerator.cpp
     src/storage/ConversationRepository.cpp
     src/storage/Database.cpp
     src/storage/MessageRepository.cpp
     src/storage/SettingsRepository.cpp
     src/storage/TransferRepository.cpp
+)
+
+fengsui_add_qttest(tst_add_peer_dialog
+    src/tests/tst_add_peer_dialog.cpp
+    src/core/TcpProbe.cpp
+    src/ui/contacts/AddPeerDialog.cpp
+)
+
+fengsui_add_qttest(tst_beacon_policy
+    src/tests/tst_beacon_policy.cpp
+    src/app/AppSettings.cpp
+    src/core/BeaconService.cpp
+    src/network/UdpDiscovery.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/platform/PlatformUtils.cpp
+    src/storage/Database.cpp
+    src/storage/SettingsRepository.cpp
 )

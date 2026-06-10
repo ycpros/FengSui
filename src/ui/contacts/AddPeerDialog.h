@@ -14,6 +14,8 @@ class QPushButton;
 
 namespace FengSui {
 
+class NetworkPolicy;
+
 // 手动添加设备对话框。
 // 提供 IP 和端口输入，点击"连接"后通过 TcpProbe 验证 TCP 可达性。
 // 调用方通过 resultPeer() 获取验证成功的设备信息。
@@ -24,7 +26,9 @@ public:
     // 创建添加设备对话框。
     // defaultPort: 端口输入框默认值（监听端口）。
     // parent: Qt 父对象。
-    explicit AddPeerDialog(quint16 defaultPort, QWidget* parent = nullptr);
+    explicit AddPeerDialog(quint16 defaultPort,
+                           const NetworkPolicy* networkPolicy = nullptr,
+                           QWidget* parent = nullptr);
 
     // 获取连接验证成功的设备信息。
     // 仅在 exec() 返回 Accepted 后有效。
@@ -56,6 +60,7 @@ private:
     QPushButton*    m_connectBtn = nullptr;
     QPushButton*    m_cancelBtn = nullptr;
     PeerInfo        m_resultPeer;
+    const NetworkPolicy* m_networkPolicy = nullptr;
     quint16         m_defaultPort = 8787;
 };
 

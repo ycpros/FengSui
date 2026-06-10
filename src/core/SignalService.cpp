@@ -8,6 +8,7 @@
 #include "network/Protocol.h"
 #include "network/TcpConnection.h"
 #include "network/TcpServer.h"
+#include "platform/InterfaceEnumerator.h"
 #include "storage/ConversationRepository.h"
 #include "storage/MessageRepository.h"
 
@@ -16,14 +17,39 @@
 #include <QDebug>
 #include <QHostAddress>
 #include <QJsonObject>
-#include <QNetworkInterface>
 #include <QUuid>
 
 namespace FengSui {
 
-SignalService::SignalService(AppSettings* settings, QObject* parent)
+namespace {
+
+QList<NetworkInterfaceInfo> orderedInterfaces()
+{
+    QList<NetworkInterfaceInfo> ordered = InterfaceEnumerator::candidates();
+    const QList<NetworkInterfaceInfo> all = InterfaceEnumerator::enumerate();
+    for (const NetworkInterfaceInfo& iface : all) {
+        bool exists = false;
+        for (const NetworkInterfaceInfo& current : ordered) {
+            if (current.id == iface.id && current.ip == iface.ip) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            ordered.append(iface);
+        }
+    }
+    return ordered;
+}
+
+} // namespace
+
+SignalService::SignalService(AppSettings* settings,
+                             NetworkPolicy* networkPolicy,
+                             QObject* parent)
     : QObject(parent)
     , m_settings(settings)
+    , m_networkPolicy(networkPolicy)
     , m_server(new TcpServer(this))
 {
     // 入站连接到来时加入待识别列表
@@ -44,7 +70,35 @@ SignalService::~SignalService()
 
 bool SignalService::start(QString& errorOut)
 {
-    return start(selectTcpBindAddress(), errorOut);
+    if (m_running) {
+        return true;
+    }
+
+    if (!m_settings) {
+        errorOut = QStringLiteral("AppSettings is not available");
+        return false;
+    }
+
+    m_localPeerId = m_settings->peerId().trimmed();
+    if (m_localPeerId.isEmpty()) {
+        errorOut = QStringLiteral("Local peer_id is empty");
+        return false;
+    }
+
+    const QList<BindEndpoint> endpoints = buildBindEndpoints();
+    if (endpoints.isEmpty()) {
+        errorOut = QStringLiteral("No authorized TCP bind endpoints");
+        return false;
+    }
+
+    if (!m_server->start(endpoints, errorOut)) {
+        return false;
+    }
+
+    m_running = true;
+    qInfo() << "Signal service started, peer:" << m_localPeerId
+            << "bound endpoints:" << m_server->boundEndpoints().size();
+    return true;
 }
 
 bool SignalService::start(const QHostAddress& bindAddress, QString& errorOut)
@@ -74,6 +128,11 @@ bool SignalService::start(const QHostAddress& bindAddress, QString& errorOut)
             << "address:" << bindAddress.toString()
             << "port:" << m_server->port();
     return true;
+}
+
+void SignalService::setNetworkPolicy(NetworkPolicy* networkPolicy)
+{
+    m_networkPolicy = networkPolicy;
 }
 
 void SignalService::stop()
@@ -614,18 +673,23 @@ void SignalService::failPendingMessages(const QString& peerId,
     m_pendingMessages.remove(peerId);
 }
 
-QHostAddress SignalService::selectTcpBindAddress() const
+QList<BindEndpoint> SignalService::buildBindEndpoints() const
 {
-    const QList<QHostAddress> addresses = QNetworkInterface::allAddresses();
-    for (const QHostAddress& address : addresses) {
-        if (address.protocol() == QAbstractSocket::IPv4Protocol
-            && !address.isLoopback()) {
-            return address;
-        }
+    if (!m_networkPolicy || !m_settings) {
+        return {};
     }
 
-    // 没有可用网卡时退回 localhost，保证离线开发和自动化测试仍可启动。
-    return QHostAddress::LocalHost;
+    QList<InterfaceAddress> addresses;
+    const QList<NetworkInterfaceInfo> interfaces = orderedInterfaces();
+    for (const NetworkInterfaceInfo& iface : interfaces) {
+        InterfaceAddress address;
+        address.interfaceId = iface.id;
+        address.interfaceName = iface.name;
+        address.ip = iface.ip;
+        addresses.append(address);
+    }
+
+    return m_networkPolicy->getBindEndpoints(m_settings->listenPort(), addresses);
 }
 
 // ---- 存储层注入与查询代理 ----

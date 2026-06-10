@@ -7,6 +7,7 @@
 
 #include "models/Conversation.h"
 #include "models/Message.h"
+#include "models/NetworkPolicy.h"
 #include "models/PeerInfo.h"
 
 #include <QHash>
@@ -23,6 +24,7 @@ class AppSettings;
 class ConversationRepository;
 class CourierService;
 class MessageRepository;
+class NetworkPolicy;
 class TcpConnection;
 class TcpServer;
 
@@ -37,7 +39,9 @@ public:
     // 创建消息通道编排服务。
     // settings: 应用设置实例，提供 peer_id 和 listen_port，生命周期必须长于本对象。
     // parent: Qt 父对象，用于资源释放。
-    explicit SignalService(AppSettings* settings, QObject* parent = nullptr);
+    explicit SignalService(AppSettings* settings,
+                           NetworkPolicy* networkPolicy = nullptr,
+                           QObject* parent = nullptr);
 
     // 销毁消息通道服务。
     // 析构时自动停止 TcpServer 并关闭所有连接。
@@ -55,6 +59,8 @@ public:
     // 返回值：TcpServer 成功绑定端口时返回 true。
     // 线程安全性：仅在对象所属线程调用。
     bool start(const QHostAddress& bindAddress, QString& errorOut);
+
+    void setNetworkPolicy(NetworkPolicy* networkPolicy);
 
     // 停止 TCP 消息服务，关闭所有活动连接。
     // 线程安全性：仅在对象所属线程调用。
@@ -200,10 +206,10 @@ private:
     // 将指定对等体的待发送文本消息标记为失败并清空队列。
     void failPendingMessages(const QString& peerId, const QString& errorMessage);
 
-    // 选择生产路径的 TCP 绑定地址：优先使用非回环 IPv4，失败时退回 localhost。
-    QHostAddress selectTcpBindAddress() const;
+    QList<BindEndpoint> buildBindEndpoints() const;
 
     AppSettings* m_settings = nullptr;
+    NetworkPolicy* m_networkPolicy = nullptr;
     TcpServer* m_server = nullptr;
     QString m_localPeerId;
     bool m_running = false;

@@ -5,6 +5,7 @@
 #include "models/PeerInfo.h"
 #include "storage/ConversationRepository.h"
 #include "storage/Database.h"
+#include "storage/ManualPeerRepository.h"
 #include "storage/MessageRepository.h"
 
 #include <QDateTime>
@@ -31,6 +32,7 @@ void StorageTest::conversationAndMessageRoundTrip()
     FengSui::ConversationRepository conversations(&database,
                                                    QStringLiteral("peer_local"));
     FengSui::MessageRepository messages(&database);
+    FengSui::ManualPeerRepository manualPeers(&database);
 
     FengSui::PeerInfo peer;
     peer.peerId = QStringLiteral("peer_remote");
@@ -83,6 +85,21 @@ void StorageTest::conversationAndMessageRoundTrip()
                                             message.createdAt));
     QVERIFY(conversations.incrementUnreadCount(conversation.conversationId));
     QVERIFY(conversations.resetUnreadCount(conversation.conversationId));
+
+    FengSui::ManualPeer manualPeer;
+    manualPeer.name = QStringLiteral("Manual Remote");
+    manualPeer.host = QStringLiteral("192.168.10.33");
+    manualPeer.port = 8787;
+    manualPeer.lastSuccessAt = QDateTime::currentDateTimeUtc();
+    QVERIFY(manualPeers.upsertManualPeer(manualPeer));
+
+    const std::optional<FengSui::ManualPeer> storedManualPeer =
+        manualPeers.getManualPeer(manualPeer.host, manualPeer.port);
+    QVERIFY(storedManualPeer.has_value());
+    QCOMPARE(storedManualPeer->name, manualPeer.name);
+    QCOMPARE(storedManualPeer->host, manualPeer.host);
+    QCOMPARE(storedManualPeer->port, manualPeer.port);
+    QCOMPARE(manualPeers.getAllManualPeers().size(), 1);
 }
 
 } // namespace

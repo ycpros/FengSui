@@ -6,12 +6,21 @@
 
 #include <QHostAddress>
 #include <QJsonObject>
+#include <QList>
 #include <QObject>
 #include <QString>
 
 class QUdpSocket;
 
 namespace FengSui {
+
+struct DiscoveryEndpoint {
+    QString      interfaceId;
+    QString      interfaceName;
+    QHostAddress ip;
+    int          prefixLength = 24;
+    quint16      tcpPort = 0;
+};
 
 // UdpDiscovery 只负责 UDP 多播 socket 和 JSON 编解码。
 // 业务语义由 BeaconService 处理，收到有效 JSON 后通过 Qt 信号通知上层。
@@ -36,6 +45,9 @@ public:
     // 线程安全性：仅在对象所属线程调用。
     bool start(QString& errorOut);
 
+    // 启动 UDP 发现监听，并指定允许参与发现发送的接口。
+    bool start(const QList<DiscoveryEndpoint>& endpoints, QString& errorOut);
+
     // 停止监听并释放 socket。
     // 线程安全性：仅在对象所属线程调用。
     void stop();
@@ -45,12 +57,19 @@ public:
     // 线程安全性：仅在对象所属线程调用。
     bool isRunning() const;
 
+    QList<DiscoveryEndpoint> discoveryEndpoints() const;
+
     // 发送 presence.hello 报文。
     // payload: 除 type 外的 hello 字段；函数会强制写入 type。
     // errorOut: 发送失败时写入可读错误信息。
     // 返回值：完整写入 UDP 数据报时返回 true。
     // 线程安全性：仅在对象所属线程调用。
     bool sendHello(const QJsonObject& payload, QString& errorOut);
+
+    // 将 hello 发往指定授权接口的 directed broadcast。
+    bool sendHello(const QJsonObject& payload,
+                   const DiscoveryEndpoint& endpoint,
+                   QString& errorOut);
 
     // 发送 presence.heartbeat 报文。
     // peerId: 本机 peer_id，不能为空。
@@ -85,7 +104,12 @@ private:
     // 发送 JSON 对象到发现多播地址。
     bool sendMessage(const QJsonObject& message, QString& errorOut);
 
+    bool sendMessageToEndpoint(const QJsonObject& message,
+                               const DiscoveryEndpoint& endpoint,
+                               QString& errorOut);
+
     QUdpSocket* m_socket = nullptr;
+    QList<DiscoveryEndpoint> m_endpoints;
     bool m_running = false;
 };
 

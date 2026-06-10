@@ -18,6 +18,8 @@ class QPushButton;
 namespace FengSui {
 
 class BeaconService;
+class ManualPeerRepository;
+class NetworkPolicy;
 
 // ContactsPage 负责展示局域网在线设备。
 // 不直接访问 network 或 storage 层，所有设备状态来自 BeaconService 的信号。
@@ -31,7 +33,10 @@ public:
     // beaconService: 局域网发现服务实例，可为空；为空时页面仅显示空态。
     // parent: Qt 父对象，用于资源释放。
     // 线程安全性：仅在主线程构造。
-    explicit ContactsPage(BeaconService* beaconService, QWidget* parent = nullptr);
+    explicit ContactsPage(BeaconService* beaconService,
+                          NetworkPolicy* networkPolicy = nullptr,
+                          ManualPeerRepository* manualPeerRepository = nullptr,
+                          QWidget* parent = nullptr);
 
 public slots:
     // 将手动添加的设备加入在线列表。
@@ -85,7 +90,13 @@ private:
     // 检查指定 IP:端口是否已在列表中。
     bool hasPeerAtEndpoint(const QString& ip, quint16 port) const;
 
+    bool hasManualPeerAtEndpoint(const QString& ip, quint16 port) const;
+
+    void persistManualPeer(const PeerInfo& peer);
+
     BeaconService* m_beaconService = nullptr;
+    NetworkPolicy* m_networkPolicy = nullptr;
+    ManualPeerRepository* m_manualPeerRepository = nullptr;
     QLabel* m_emptyLabel = nullptr;
     QListWidget* m_peerList = nullptr;
     QPushButton* m_addBtn = nullptr;

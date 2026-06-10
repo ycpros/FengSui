@@ -34,6 +34,9 @@ int main(int argc, char* argv[])
         qInfo() << "Onboarding completed";
     }
 
+    // 首次向导可能刚写入授权网卡和 CIDR，启动网络服务前刷新运行时策略。
+    app.reloadNetworkPolicyFromSettings();
+
     // 向导完成后再启动服务，避免首次设置阶段使用默认配置。
     app.startBeaconService();
     app.startSignalService();

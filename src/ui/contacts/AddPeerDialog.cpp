@@ -3,6 +3,7 @@
 
 #include "ui/contacts/AddPeerDialog.h"
 #include "core/TcpProbe.h"
+#include "models/NetworkPolicy.h"
 
 #include <QDialogButtonBox>
 #include <QDateTime>
@@ -24,8 +25,11 @@ constexpr int kProbeTimeoutMs = 3000;
 
 } // namespace
 
-AddPeerDialog::AddPeerDialog(quint16 defaultPort, QWidget* parent)
+AddPeerDialog::AddPeerDialog(quint16 defaultPort,
+                             const NetworkPolicy* networkPolicy,
+                             QWidget* parent)
     : QDialog(parent)
+    , m_networkPolicy(networkPolicy)
     , m_defaultPort(defaultPort)
 {
     setupUi();
@@ -50,6 +54,7 @@ void AddPeerDialog::setupUi()
     auto* ipLabel = new QLabel(QStringLiteral("IP 地址"), this);
     ipLabel->setFixedWidth(60);
     m_ipEdit = new QLineEdit(this);
+    m_ipEdit->setObjectName(QStringLiteral("ipEdit"));
     m_ipEdit->setPlaceholderText(QStringLiteral("例如 192.168.1.100"));
     ipRow->addWidget(ipLabel);
     ipRow->addWidget(m_ipEdit, 1);
@@ -59,6 +64,7 @@ void AddPeerDialog::setupUi()
     auto* portLabel = new QLabel(QStringLiteral("端口"), this);
     portLabel->setFixedWidth(60);
     m_portEdit = new QLineEdit(this);
+    m_portEdit->setObjectName(QStringLiteral("portEdit"));
     m_portEdit->setPlaceholderText(QStringLiteral("8787"));
     m_portEdit->setText(QString::number(m_defaultPort));
     portRow->addWidget(portLabel);
@@ -66,6 +72,7 @@ void AddPeerDialog::setupUi()
 
     // 状态消息标签
     m_statusLabel = new QLabel(this);
+    m_statusLabel->setObjectName(QStringLiteral("statusLabel"));
     m_statusLabel->setAlignment(Qt::AlignLeft);
     m_statusLabel->setStyleSheet("padding-left: 4px;");
     m_statusLabel->setVisible(false);
@@ -74,6 +81,7 @@ void AddPeerDialog::setupUi()
     auto* btnRow = new QHBoxLayout();
     btnRow->addStretch();
     m_connectBtn = new QPushButton(QStringLiteral("连接"), this);
+    m_connectBtn->setObjectName(QStringLiteral("connectButton"));
     m_connectBtn->setDefault(true);
     m_connectBtn->setStyleSheet(
         "QPushButton {"
@@ -115,6 +123,11 @@ bool AddPeerDialog::validateInput(QString& errorOut) const
     QHostAddress addr(ip);
     if (addr.isNull() || addr.protocol() != QAbstractSocket::IPv4Protocol) {
         errorOut = QStringLiteral("IP 地址格式无效");
+        return false;
+    }
+
+    if (m_networkPolicy && !m_networkPolicy->isAddressAllowed(addr)) {
+        errorOut = QStringLiteral("目标 IP 不在允许网段内");
         return false;
     }
 

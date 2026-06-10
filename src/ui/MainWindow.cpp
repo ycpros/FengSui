@@ -133,7 +133,10 @@ void MainWindow::createPageStack()
 
     // 按导航顺序创建 5 个页面
     m_chatPage     = new ChatPage(this);
-    m_contactsPage = new ContactsPage(m_app ? m_app->beaconService() : nullptr, this);
+    m_contactsPage = new ContactsPage(m_app ? m_app->beaconService() : nullptr,
+                                      m_app ? m_app->networkPolicy() : nullptr,
+                                      m_app ? m_app->manualPeerRepository() : nullptr,
+                                      this);
     m_transferPage = new TransferCenterPage(this);
     m_sharePage    = new SharePage(this);
     m_settingsPage = new SettingsPage(this);

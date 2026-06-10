@@ -6,6 +6,7 @@
 
 #include <QAbstractSocket>
 #include <QDebug>
+#include <QStringList>
 #include <QTcpServer>
 #include <QTcpSocket>
 
@@ -28,50 +29,79 @@ bool TcpServer::start(quint16 port, QString& errorOut)
 
 bool TcpServer::start(const QHostAddress& bindAddress, quint16 port, QString& errorOut)
 {
-    if (m_running) {
-        return true;
-    }
-
-    m_server = new QTcpServer(this);
-    connect(m_server, &QTcpServer::newConnection, this, &TcpServer::onNewConnection);
-
     const QHostAddress effectiveBindAddress = bindAddress.isNull()
         ? QHostAddress::LocalHost
         : bindAddress;
+    BindEndpoint endpoint;
+    endpoint.ip = effectiveBindAddress;
+    endpoint.port = port;
+    endpoint.interfaceName = effectiveBindAddress.toString();
+    return start(QList<BindEndpoint>{endpoint}, errorOut);
+}
 
-    // ShareAddress + ReuseAddressHint 允许同一台机器运行多个实例。
-    // 绑定地址由 SignalService 选择，避免默认监听 0.0.0.0。
-    if (!m_server->listen(effectiveBindAddress, port)) {
-        errorOut = m_server->errorString();
-        qWarning() << "Failed to start TCP server on"
-                   << effectiveBindAddress.toString()
-                   << port
-                   << ":"
-                   << errorOut;
-        m_server->deleteLater();
-        m_server = nullptr;
+bool TcpServer::start(const QList<BindEndpoint>& endpoints, QString& errorOut)
+{
+    if (m_running) {
+        return true;
+    }
+    if (endpoints.isEmpty()) {
+        errorOut = QStringLiteral("No TCP bind endpoints");
         return false;
     }
 
-    m_bindAddress = effectiveBindAddress;
-    m_port = m_server->serverPort();
-    m_running = true;
+    QStringList failures;
+    for (const BindEndpoint& endpoint : endpoints) {
+        auto* server = new QTcpServer(this);
+        connect(server, &QTcpServer::newConnection, this, &TcpServer::onNewConnection);
 
-    qInfo() << "TCP server started on" << m_bindAddress.toString() << m_port;
+        if (!server->listen(endpoint.ip, endpoint.port)) {
+            const QString failure = QStringLiteral("%1:%2 %3")
+                                        .arg(endpoint.ip.toString())
+                                        .arg(endpoint.port)
+                                        .arg(server->errorString());
+            failures.append(failure);
+            qWarning() << "Failed to start TCP server on" << failure;
+            server->deleteLater();
+            continue;
+        }
+
+        BindEndpoint bound = endpoint;
+        bound.port = server->serverPort();
+        m_servers.append(server);
+        m_boundEndpoints.append(bound);
+        qInfo() << "TCP server started on" << bound.ip.toString() << bound.port;
+    }
+
+    if (m_servers.isEmpty()) {
+        errorOut = failures.join(QStringLiteral("; "));
+        if (errorOut.isEmpty()) {
+            errorOut = QStringLiteral("No TCP bind endpoints could be started");
+        }
+        return false;
+    }
+
+    if (!failures.isEmpty()) {
+        qWarning() << "TCP server partial bind failures:" << failures;
+    }
+
+    m_port = m_boundEndpoints.first().port;
+    m_running = true;
     return true;
 }
 
 void TcpServer::stop()
 {
-    if (!m_server) {
+    if (m_servers.isEmpty()) {
         m_running = false;
         return;
     }
 
-    m_server->close();
-    m_server->deleteLater();
-    m_server = nullptr;
-    m_bindAddress = QHostAddress();
+    for (QTcpServer* server : m_servers) {
+        server->close();
+        server->deleteLater();
+    }
+    m_servers.clear();
+    m_boundEndpoints.clear();
     m_running = false;
     m_port = 0;
 
@@ -88,15 +118,21 @@ quint16 TcpServer::port() const
     return m_port;
 }
 
+QList<BindEndpoint> TcpServer::boundEndpoints() const
+{
+    return m_boundEndpoints;
+}
+
 void TcpServer::onNewConnection()
 {
-    if (!m_server) {
+    auto* server = qobject_cast<QTcpServer*>(sender());
+    if (!server) {
         return;
     }
 
     // accept 所有待处理连接
-    while (m_server->hasPendingConnections()) {
-        QTcpSocket* socket = m_server->nextPendingConnection();
+    while (server->hasPendingConnections()) {
+        QTcpSocket* socket = server->nextPendingConnection();
         if (!socket) {
             continue;
         }

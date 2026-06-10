@@ -63,6 +63,20 @@ public:
     quint16 listenPort() const;
     void setListenPort(quint16 port);
 
+    // ---- 网络策略 ----
+
+    // 授权网卡 ID 列表（逗号分隔），默认空
+    QString selectedInterfaces() const;
+    void setSelectedInterfaces(const QString& ids);
+
+    // 允许网段 CIDR 列表（逗号分隔），默认空
+    QString allowedCidrs() const;
+    void setAllowedCidrs(const QString& cidrs);
+
+    // 网络模式：secure_lan / multi_lan / compat_test，默认 secure_lan
+    QString networkMode() const;
+    void setNetworkMode(const QString& mode);
+
     // ---- 向导状态 ----
 
     // 是否已完成首次启动向导

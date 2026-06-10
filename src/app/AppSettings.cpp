@@ -21,6 +21,9 @@ static const char* KEY_PEER_ID             = "peer_id";
 static const char* KEY_DISCOVERY_ENABLED   = "discovery_enabled";
 static const char* KEY_LISTEN_PORT         = "listen_port";
 static const char* KEY_ONBOARDING_COMPLETED = "onboarding_completed";
+static const char* KEY_SELECTED_INTERFACES  = "selected_interfaces";
+static const char* KEY_ALLOWED_CIDRS        = "allowed_cidrs";
+static const char* KEY_NETWORK_MODE         = "network_mode";
 
 AppSettings::AppSettings(SettingsRepository* repository, QObject* parent)
     : QObject(parent)
@@ -127,6 +130,38 @@ quint16 AppSettings::listenPort() const
 void AppSettings::setListenPort(quint16 port)
 {
     writeValue(KEY_LISTEN_PORT, QString::number(port));
+}
+
+// ---- 网络策略 ----
+
+QString AppSettings::selectedInterfaces() const
+{
+    return readValue(KEY_SELECTED_INTERFACES);
+}
+
+void AppSettings::setSelectedInterfaces(const QString& ids)
+{
+    writeValue(KEY_SELECTED_INTERFACES, ids.trimmed());
+}
+
+QString AppSettings::allowedCidrs() const
+{
+    return readValue(KEY_ALLOWED_CIDRS);
+}
+
+void AppSettings::setAllowedCidrs(const QString& cidrs)
+{
+    writeValue(KEY_ALLOWED_CIDRS, cidrs.trimmed());
+}
+
+QString AppSettings::networkMode() const
+{
+    return readValue(KEY_NETWORK_MODE, QStringLiteral("secure_lan"));
+}
+
+void AppSettings::setNetworkMode(const QString& mode)
+{
+    writeValue(KEY_NETWORK_MODE, mode.trimmed());
 }
 
 // ---- 向导状态 ----

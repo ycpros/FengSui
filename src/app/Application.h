@@ -1,8 +1,8 @@
 // Application.h
+#pragma once
+
 // FengSui 应用主类，继承 QApplication，持有全局数据库、设置仓库和配置实例。
 // 负责应用级初始化（日志、数据库连接、设置加载）和生命周期管理。
-
-#pragma once
 
 #include <QApplication>
 
@@ -13,7 +13,9 @@ class AppSettings;
 class BeaconService;
 class ConversationRepository;
 class CourierService;
+class NetworkPolicy;
 class Database;
+class ManualPeerRepository;
 class MessageRepository;
 class SettingsRepository;
 class SignalService;
@@ -86,8 +88,18 @@ public:
     // 获取文件传输编排服务实例。
     CourierService* courierService() const;
 
+    // 获取当前运行时网络策略。
+    NetworkPolicy* networkPolicy() const;
+
+    // 从 AppSettings 和当前网卡列表刷新运行时网络策略。
+    // 首次无配置时会选择主物理候选网卡和其 CIDR 作为 secure_lan 默认值。
+    void reloadNetworkPolicyFromSettings();
+
     // 获取传输任务存储仓库实例。
     TransferRepository* transferRepository() const;
+
+    // 获取手动添加设备仓库实例。
+    ManualPeerRepository* manualPeerRepository() const;
 
 private:
     AppSettings*         m_settings = nullptr;
@@ -98,7 +110,9 @@ private:
     SettingsRepository*  m_settingsRepository = nullptr;
     ConversationRepository* m_conversationRepo = nullptr;
     MessageRepository*      m_messageRepo = nullptr;
+    ManualPeerRepository*   m_manualPeerRepo = nullptr;
     TransferRepository*     m_transferRepo = nullptr;
+    NetworkPolicy*          m_networkPolicy = nullptr;
 };
 
 } // namespace FengSui
