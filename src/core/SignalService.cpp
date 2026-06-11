@@ -418,6 +418,9 @@ void SignalService::onConnectionDisconnected()
     if (!peerId.isEmpty()) {
         qInfo() << "Peer disconnected:" << peerId;
         failPendingMessages(peerId, QStringLiteral("连接已断开"));
+        if (m_courierService) {
+            m_courierService->handlePeerDisconnected(peerId);
+        }
         emit peerDisconnected(peerId);
         unregisterConnection(peerId);
     }
@@ -436,6 +439,9 @@ void SignalService::onConnectionError(const QString& errorMessage)
     qWarning() << "Connection error for peer" << peerId << ":" << errorMessage;
     if (!peerId.isEmpty()) {
         failPendingMessages(peerId, errorMessage);
+        if (m_courierService) {
+            m_courierService->handlePeerDisconnected(peerId);
+        }
     }
     emit errorOccurred(QStringLiteral("Peer %1: %2").arg(peerId, errorMessage));
 }

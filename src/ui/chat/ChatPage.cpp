@@ -3,12 +3,19 @@
 
 #include "ui/chat/ChatPage.h"
 
+#include "core/CourierService.h"
 #include "core/SignalService.h"
+#include "ui/UiStyle.h"
 
 #include <QDateTime>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QEvent>
+#include <QFileInfo>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMessageBox>
+#include <QMimeData>
 #include <QScrollBar>
 #include <QVBoxLayout>
 
@@ -41,6 +48,24 @@ void ChatPage::setSignalService(SignalService* service)
     }
 }
 
+void ChatPage::setCourierService(CourierService* service)
+{
+    if (m_courierService == service) {
+        return;
+    }
+    if (m_courierService) {
+        disconnect(m_courierService, nullptr, this, nullptr);
+    }
+
+    m_courierService = service;
+    if (m_courierService) {
+        connect(m_courierService,
+                &CourierService::transferRequested,
+                this,
+                &ChatPage::onTransferRequested);
+    }
+}
+
 void ChatPage::setLocalPeerId(const QString& peerId)
 {
     m_localPeerId = peerId;
@@ -61,10 +86,15 @@ void ChatPage::openConversation(const PeerInfo& peer)
     m_peerNameLabel->setText(peer.displayName.isEmpty() ? peer.peerId : peer.displayName);
     if (peer.online) {
         m_peerStatusLabel->setText(QStringLiteral("在线"));
-        m_peerStatusLabel->setStyleSheet("color: #187a3b; font-size: 12px;");
+        m_peerStatusLabel->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#e7f5f4"),
+                                                            QStringLiteral("#0f6f70")));
     } else {
         m_peerStatusLabel->setText(QStringLiteral("离线"));
-        m_peerStatusLabel->setStyleSheet("color: #999; font-size: 12px;");
+        m_peerStatusLabel->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#eef1f5"),
+                                                            QStringLiteral("#667085")));
+    }
+    if (m_offlineHintLabel) {
+        m_offlineHintLabel->setVisible(!peer.online);
     }
 
     // 获取或创建会话 ID
@@ -210,6 +240,30 @@ void ChatPage::onConversationUpdated(const QString& conversationId)
     refreshConversationList();
 }
 
+void ChatPage::onTransferRequested(const TransferTask& task)
+{
+    if (!m_courierService) {
+        return;
+    }
+
+    const qint64 kib = qMax<qint64>(1, (task.fileSize + 1023) / 1024);
+    const QString message = QStringLiteral("%1 请求发送文件：\n%2\n大小：%3 KB")
+                                .arg(task.peerId, task.fileName)
+                                .arg(kib);
+    const QMessageBox::StandardButton button =
+        QMessageBox::question(this,
+                              QStringLiteral("接收文件"),
+                              message,
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::Yes);
+    if (button == QMessageBox::Yes) {
+        m_courierService->acceptTransfer(task.transferId);
+    } else {
+        m_courierService->rejectTransfer(task.transferId,
+                                         QStringLiteral("用户拒绝"));
+    }
+}
+
 // ---- UI Setup ----
 
 void ChatPage::setupUi()
@@ -230,33 +284,35 @@ void ChatPage::setupUi()
 
     // 标题
     auto* titleLabel = new QLabel(QStringLiteral("消息"), leftPanel);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold; padding: 12px;");
+    titleLabel->setStyleSheet("font-size: 20px; font-weight: 700; padding: 16px; color: #101828;");
 
     // 会话列表
     m_conversationList = new QListWidget(leftPanel);
     m_conversationList->setFocusPolicy(Qt::NoFocus);
+    m_conversationList->setObjectName(QStringLiteral("conversationList"));
     m_conversationList->setStyleSheet(
         "QListWidget {"
-        "  border: none; border-right: 1px solid #e0e0e0;"
-        "  background-color: #fafafa;"
+        "  border: none; border-right: 1px solid #d8dee8;"
+        "  background-color: #ffffff;"
         "}"
         "QListWidget::item {"
-        "  border: none; border-bottom: 1px solid #eee;"
+        "  border: none; border-bottom: 1px solid #eef1f5;"
         "}"
         "QListWidget::item:selected {"
-        "  background-color: #e8e8e8;"
+        "  background-color: #e7f5f4;"
         "}"
         "QListWidget::item:hover {"
-        "  background-color: #f0f0f0;"
+        "  background-color: #f5f9fa;"
         "}"
     );
 
     // 空态提示
     m_emptyConvLabel = new QLabel(
-        QStringLiteral("暂无会话"),
+        QStringLiteral("暂无会话\n点击联系人中的在线设备开始聊天"),
         leftPanel);
     m_emptyConvLabel->setAlignment(Qt::AlignCenter);
-    m_emptyConvLabel->setStyleSheet("color: #999; font-size: 14px; padding: 40px;");
+    m_emptyConvLabel->setWordWrap(true);
+    m_emptyConvLabel->setStyleSheet("color: #667085; font-size: 13px; padding: 40px;");
     m_emptyConvLabel->setVisible(true);
     m_conversationList->setVisible(false);
 
@@ -272,11 +328,13 @@ void ChatPage::setupUi()
         QStringLiteral("选择一个会话开始聊天"),
         m_chatStack);
     m_emptyChatLabel->setAlignment(Qt::AlignCenter);
-    m_emptyChatLabel->setStyleSheet("color: #999; font-size: 14px;");
+    m_emptyChatLabel->setStyleSheet("color: #667085; font-size: 14px; background: #f8fafc;");
     m_chatStack->addWidget(m_emptyChatLabel);  // index 0
 
     // 页面 1：聊天视图
     m_chatPanel = new QWidget(m_chatStack);
+    m_chatPanel->setAcceptDrops(true);
+    m_chatPanel->installEventFilter(this);
     auto* chatLayout = new QVBoxLayout(m_chatPanel);
     chatLayout->setContentsMargins(0, 0, 0, 0);
     chatLayout->setSpacing(0);
@@ -284,14 +342,16 @@ void ChatPage::setupUi()
     // 头部栏：对方昵称 + 在线状态
     auto* headerBar = new QWidget(m_chatPanel);
     headerBar->setFixedHeight(56);
-    headerBar->setStyleSheet("background-color: #fff; border-bottom: 1px solid #e0e0e0;");
+    headerBar->setStyleSheet("background-color: #ffffff; border-bottom: 1px solid #d8dee8;");
     auto* headerLayout = new QHBoxLayout(headerBar);
     headerLayout->setContentsMargins(16, 0, 16, 0);
 
     m_peerNameLabel = new QLabel(headerBar);
-    m_peerNameLabel->setStyleSheet("font-size: 16px; font-weight: bold; border: none;");
+    m_peerNameLabel->setStyleSheet("font-size: 16px; font-weight: 700; border: none; color: #101828;");
     m_peerStatusLabel = new QLabel(headerBar);
-    m_peerStatusLabel->setStyleSheet("font-size: 12px; border: none;");
+    m_peerStatusLabel->setAlignment(Qt::AlignCenter);
+    m_peerStatusLabel->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#e7f5f4"),
+                                                        QStringLiteral("#0f6f70")));
 
     headerLayout->addWidget(m_peerNameLabel);
     headerLayout->addStretch();
@@ -299,11 +359,16 @@ void ChatPage::setupUi()
 
     // 消息区域（QScrollArea）
     m_messageScroll = new QScrollArea(m_chatPanel);
+    m_messageScroll->setAcceptDrops(true);
     m_messageScroll->setWidgetResizable(true);
     m_messageScroll->setFrameShape(QFrame::NoFrame);
-    m_messageScroll->setStyleSheet("QScrollArea { background-color: #f5f5f5; border: none; }");
+    m_messageScroll->setStyleSheet("QScrollArea { background-color: #f8fafc; border: none; }");
+    m_messageScroll->viewport()->setAcceptDrops(true);
+    m_messageScroll->viewport()->installEventFilter(this);
 
     m_messageContainer = new QWidget(m_messageScroll);
+    m_messageContainer->setAcceptDrops(true);
+    m_messageContainer->installEventFilter(this);
     m_messageLayout = new QVBoxLayout(m_messageContainer);
     m_messageLayout->setContentsMargins(8, 8, 8, 8);
     m_messageLayout->setSpacing(6);
@@ -311,19 +376,36 @@ void ChatPage::setupUi()
 
     m_messageScroll->setWidget(m_messageContainer);
 
+    m_offlineHintLabel = new QLabel(QStringLiteral("对方当前离线，消息可能无法送达"), m_chatPanel);
+    m_offlineHintLabel->setObjectName(QStringLiteral("chatOfflineHintLabel"));
+    m_offlineHintLabel->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#fff4d6"),
+                                                         QStringLiteral("#8a5a00")));
+    m_offlineHintLabel->setVisible(false);
+
+    m_dropHintLabel = new QLabel(QStringLiteral("拖入单个本地文件即可发送"), m_chatPanel);
+    m_dropHintLabel->setObjectName(QStringLiteral("chatDropHintLabel"));
+    m_dropHintLabel->setAlignment(Qt::AlignCenter);
+    m_dropHintLabel->setFixedHeight(30);
+    m_dropHintLabel->setStyleSheet(
+        "background: #eef4ff; color: #175cd3; border-top: 1px solid #d8dee8;"
+        "font-size: 12px;");
+
     // 输入栏
     auto* inputBar = new QWidget(m_chatPanel);
-    inputBar->setFixedHeight(60);
-    inputBar->setStyleSheet("background-color: #fff; border-top: 1px solid #e0e0e0;");
+    inputBar->setFixedHeight(64);
+    inputBar->setStyleSheet("background-color: #ffffff; border-top: 1px solid #d8dee8;");
     auto* inputLayout = new QHBoxLayout(inputBar);
     inputLayout->setContentsMargins(12, 8, 12, 8);
 
     m_inputEdit = new QTextEdit(inputBar);
+    m_inputEdit->setAcceptDrops(true);
     m_inputEdit->setPlaceholderText(
         QStringLiteral("输入消息..."));
     m_inputEdit->setMinimumHeight(36);
     m_inputEdit->setMaximumHeight(100);
-    m_inputEdit->setStyleSheet("border: 1px solid #ddd; border-radius: 4px; padding: 6px; font-size: 14px;");
+    m_inputEdit->setStyleSheet(
+        "border: 1px solid #d8dee8; border-radius: 6px; padding: 6px; font-size: 14px;"
+        "background: #ffffff;");
     // 安装事件过滤器以处理 Enter 键
     m_inputEdit->installEventFilter(this);
 
@@ -331,20 +413,15 @@ void ChatPage::setupUi()
         QStringLiteral("发送"), inputBar);
     m_sendBtn->setFixedSize(72, 36);
     m_sendBtn->setEnabled(false);
-    m_sendBtn->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; font-size: 14px;"
-        "}"
-        "QPushButton:hover { background-color: #3a7bc8; }"
-        "QPushButton:disabled { background-color: #ccc; }"
-    );
+    m_sendBtn->setStyleSheet(UiStyle::primaryButtonStyle());
 
     inputLayout->addWidget(m_inputEdit, 1);
     inputLayout->addWidget(m_sendBtn);
 
     chatLayout->addWidget(headerBar);
+    chatLayout->addWidget(m_offlineHintLabel);
     chatLayout->addWidget(m_messageScroll, 1);
+    chatLayout->addWidget(m_dropHintLabel);
     chatLayout->addWidget(inputBar);
 
     m_chatStack->addWidget(m_chatPanel);  // index 1
@@ -443,14 +520,14 @@ QWidget* ChatPage::createMessageBubble(const Message& message)
         outerLayout->addWidget(innerWidget);
 
         contentLabel->setStyleSheet(
-            "background-color: #4a90d9; color: white; border-radius: 12px;"
+            "background-color: #147d7e; color: white; border-radius: 12px;"
             "padding: 8px 14px; font-size: 14px;");
     } else {
         outerLayout->addWidget(innerWidget);
         outerLayout->addStretch();
 
         contentLabel->setStyleSheet(
-            "background-color: #e8e8e8; color: #333; border-radius: 12px;"
+            "background-color: #ffffff; color: #243447; border: 1px solid #d8dee8; border-radius: 12px;"
             "padding: 8px 14px; font-size: 14px;");
     }
 
@@ -633,6 +710,22 @@ bool ChatPage::isNearBottom() const
 
 bool ChatPage::eventFilter(QObject* obj, QEvent* event)
 {
+    if (event->type() == QEvent::DragEnter) {
+        auto* dragEvent = static_cast<QDragEnterEvent*>(event);
+        if (dragEvent->mimeData() && dragEvent->mimeData()->hasUrls()) {
+            dragEvent->acceptProposedAction();
+            return true;
+        }
+    }
+
+    if (event->type() == QEvent::Drop) {
+        auto* dropEvent = static_cast<QDropEvent*>(event);
+        if (dropEvent->mimeData() && handleDroppedUrls(dropEvent->mimeData()->urls())) {
+            dropEvent->acceptProposedAction();
+            return true;
+        }
+    }
+
     // 处理输入框的 Enter / Shift+Enter 键
     if (obj == m_inputEdit && event->type() == QEvent::KeyPress) {
         auto* keyEvent = static_cast<QKeyEvent*>(event);
@@ -647,6 +740,52 @@ bool ChatPage::eventFilter(QObject* obj, QEvent* event)
         }
     }
     return QWidget::eventFilter(obj, event);
+}
+
+bool ChatPage::handleDroppedUrls(const QList<QUrl>& urls)
+{
+    if (urls.isEmpty()) {
+        return false;
+    }
+
+    if (!m_courierService || m_activePeer.peerId.isEmpty()) {
+        QMessageBox::information(this,
+                                 QStringLiteral("发送文件"),
+                                 QStringLiteral("请先选择一个在线会话"));
+        return true;
+    }
+    if (!m_activePeer.online) {
+        QMessageBox::information(this,
+                                 QStringLiteral("发送文件"),
+                                 QStringLiteral("对方当前离线，无法发送文件"));
+        return true;
+    }
+    if (urls.size() != 1) {
+        QMessageBox::information(this,
+                                 QStringLiteral("发送文件"),
+                                 QStringLiteral("当前仅支持拖入单个文件"));
+        return true;
+    }
+
+    const QUrl url = urls.first();
+    if (!url.isLocalFile()) {
+        QMessageBox::information(this,
+                                 QStringLiteral("发送文件"),
+                                 QStringLiteral("仅支持本地文件"));
+        return true;
+    }
+
+    const QString filePath = url.toLocalFile();
+    const QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists() || !fileInfo.isFile()) {
+        QMessageBox::information(this,
+                                 QStringLiteral("发送文件"),
+                                 QStringLiteral("当前仅支持拖入单个文件"));
+        return true;
+    }
+
+    m_courierService->sendFile(m_activePeer, filePath);
+    return true;
 }
 
 } // namespace FengSui

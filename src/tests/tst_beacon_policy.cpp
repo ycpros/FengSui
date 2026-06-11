@@ -2,12 +2,17 @@
 // BeaconService 发现报文策略校验测试。
 
 #include "core/BeaconService.h"
+#include "core/ShareService.h"
 #include "models/NetworkPolicy.h"
 #include "network/UdpDiscovery.h"
+#include "storage/Database.h"
+#include "storage/ShareRepository.h"
 
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest/QtTest>
 
 namespace {
@@ -21,6 +26,8 @@ private slots:
     void unauthorizedAnnouncedAddressIsIgnored();
     void emptyPeerIdIsIgnored();
     void selfPeerIdIsIgnored();
+    void shareEnabledFlagIsStored();
+    void shareServiceCanBeInjected();
 
 private:
     static QJsonObject hello(const QString& peerId,
@@ -75,6 +82,47 @@ void BeaconPolicyTest::allowedHelloCreatesPeer()
     const QList<FengSui::PeerInfo> peers = service.peers();
     QCOMPARE(peers.size(), 1);
     QCOMPARE(peers.first().ip, QStringLiteral("192.168.10.22"));
+}
+
+void BeaconPolicyTest::shareEnabledFlagIsStored()
+{
+    FengSui::NetworkPolicy policy;
+    policy.setAllowedCidrs({QStringLiteral("192.168.10.0/24")});
+
+    FengSui::BeaconService service(nullptr, &policy);
+    service.setLocalPeerIdForTest(QStringLiteral("peer_local"));
+    QJsonObject message =
+        hello(QStringLiteral("peer_remote"), QStringLiteral("192.168.10.22"));
+    message.insert(QStringLiteral("share_enabled"), true);
+    deliver(service, message, QStringLiteral("192.168.10.22"));
+
+    const QList<FengSui::PeerInfo> peers = service.peers();
+    QCOMPARE(peers.size(), 1);
+    QVERIFY(peers.first().shareEnabled);
+}
+
+void BeaconPolicyTest::shareServiceCanBeInjected()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    FengSui::Database database(tempDir.filePath(QStringLiteral("share.db")));
+    QVERIFY(database.initialize());
+    FengSui::ShareRepository repository(&database);
+    FengSui::ShareService shareService;
+    shareService.setShareRepository(&repository);
+
+    FengSui::NetworkPolicy policy;
+    FengSui::BeaconService service(nullptr, &policy);
+    service.setShareService(&shareService);
+
+    QSignalSpy availabilitySpy(
+        &shareService,
+        &FengSui::ShareService::shareAvailabilityChanged);
+    QVERIFY(shareService.addSharedFolder(tempDir.path()).has_value());
+    QCOMPARE(availabilitySpy.size(), 1);
+
+    service.setShareService(nullptr);
 }
 
 void BeaconPolicyTest::unauthorizedSourceIsIgnored()

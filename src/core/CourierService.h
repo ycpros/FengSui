@@ -17,6 +17,7 @@ class QFile;
 
 namespace FengSui {
 
+class AppSettings;
 class SignalService;
 class TcpConnection;
 class TransferRepository;
@@ -53,6 +54,9 @@ public:
     // 注入消息通道服务。由 Application 在初始化时调用。
     void setSignalService(SignalService* service);
 
+    // 注入应用设置。用于读取默认下载目录等本地配置。
+    void setAppSettings(AppSettings* settings);
+
     // 注入传输任务存储仓库。由 Application 在初始化时调用。
     void setTransferRepository(TransferRepository* repo);
 
@@ -86,6 +90,9 @@ public:
     // 取消正在进行的传输。
     // transferId: 被取消的传输任务 ID。
     void cancelTransfer(const QString& transferId);
+
+    // 对等体连接断开时标记相关活跃传输失败。
+    void handlePeerDisconnected(const QString& peerId);
 
     // ---- 消息入口（由 SignalService 调用） ----
 
@@ -172,7 +179,13 @@ private:
     // 查找与 transferId 关联的活跃 TcpConnection。
     TcpConnection* findConnectionForTransfer(const QString& transferId) const;
 
+    // 发送 transfer.error 给对端（尽力发送）。
+    void sendTransferError(const QString& transferId,
+                           const QString& errorCode,
+                           const QString& errorMessage);
+
     SignalService*       m_signalService = nullptr;
+    AppSettings*         m_settings = nullptr;
     TransferRepository*  m_transferRepo = nullptr;
     QString              m_localPeerId;
 

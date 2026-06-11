@@ -20,6 +20,7 @@ namespace FengSui {
 
 class AppSettings;
 class NetworkPolicy;
+class ShareService;
 
 // BeaconService 负责 UDP 发现业务状态：本机身份、对端在线表和心跳超时。
 // 不直接操作界面或数据库，状态变化通过 Qt 信号通知外部。
@@ -37,6 +38,8 @@ public:
                            QObject* parent = nullptr);
 
     void setNetworkPolicy(NetworkPolicy* networkPolicy);
+
+    void setShareService(ShareService* shareService);
 
     // 测试辅助：不启动 UDP socket 时设置本机 peer_id。
     void setLocalPeerIdForTest(const QString& peerId) { m_localPeerId = peerId; }
@@ -113,6 +116,7 @@ private:
 
     AppSettings* m_settings = nullptr;
     NetworkPolicy* m_networkPolicy = nullptr;
+    ShareService* m_shareService = nullptr;
     UdpDiscovery* m_discovery = nullptr;
     QTimer* m_helloTimer = nullptr;
     QTimer* m_timeoutTimer = nullptr;

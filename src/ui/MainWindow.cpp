@@ -10,10 +10,13 @@
 #include "ui/transfer_center/TransferCenterPage.h"
 #include "ui/share/SharePage.h"
 #include "ui/settings/SettingsPage.h"
+#include "ui/UiStyle.h"
 
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QListWidget>
 #include <QStackedWidget>
+#include <QVBoxLayout>
 
 namespace FengSui {
 
@@ -36,6 +39,7 @@ MainWindow::MainWindow(Application* app, QWidget* parent)
     setWindowTitle(QStringLiteral("烽燧 FengSui"));
     setMinimumSize(900, 600);
     resize(1100, 720);
+    setStyleSheet(UiStyle::appStyleSheet());
 
     setupUi();
 }
@@ -76,7 +80,7 @@ void MainWindow::setupUi()
     createNavBar();
     createPageStack();
 
-    layout->addWidget(m_navList);
+    layout->addWidget(m_navPanel);
     layout->addWidget(m_pageStack, 1);  // 页面栈占满剩余空间
 
     setCentralWidget(centralWidget);
@@ -89,29 +93,65 @@ void MainWindow::setupUi()
 
 void MainWindow::createNavBar()
 {
-    m_navList = new QListWidget(this);
-    m_navList->setFixedWidth(260);
+    m_navPanel = new QWidget(this);
+    m_navPanel->setObjectName(QStringLiteral("mainNavPanel"));
+    m_navPanel->setFixedWidth(260);
+    m_navPanel->setStyleSheet(
+        "QWidget#mainNavPanel { background: #16202a; border: none; }"
+        "QLabel#brandTitle { color: #ffffff; font-size: 20px; font-weight: 700; }"
+        "QLabel#brandSubtitle { color: #aab6c3; font-size: 12px; }"
+        "QLabel#onlinePill { background: #dff7e8; color: #146c43; border-radius: 10px; padding: 3px 8px; }"
+    );
+
+    auto* panelLayout = new QVBoxLayout(m_navPanel);
+    panelLayout->setContentsMargins(16, 18, 16, 16);
+    panelLayout->setSpacing(14);
+
+    auto* brandTitle = new QLabel(QStringLiteral("烽燧"), m_navPanel);
+    brandTitle->setObjectName(QStringLiteral("brandTitle"));
+
+    auto* brandSubtitle = new QLabel(QStringLiteral("FengSui 局域网传输"), m_navPanel);
+    brandSubtitle->setObjectName(QStringLiteral("brandSubtitle"));
+
+    auto* onlinePill = new QLabel(QStringLiteral("在线"), m_navPanel);
+    onlinePill->setObjectName(QStringLiteral("onlinePill"));
+    onlinePill->setAlignment(Qt::AlignCenter);
+    onlinePill->setFixedWidth(52);
+
+    auto* brandLayout = new QHBoxLayout();
+    auto* brandTextLayout = new QVBoxLayout();
+    brandTextLayout->setSpacing(2);
+    brandTextLayout->addWidget(brandTitle);
+    brandTextLayout->addWidget(brandSubtitle);
+    brandLayout->addLayout(brandTextLayout, 1);
+    brandLayout->addWidget(onlinePill);
+
+    m_navList = new QListWidget(m_navPanel);
+    m_navList->setObjectName(QStringLiteral("mainNavigationList"));
     m_navList->setFocusPolicy(Qt::NoFocus);  // 导航栏不抢键盘焦点
 
     // 导航项样式：选中项加粗
     m_navList->setStyleSheet(
         "QListWidget {"
         "  border: none;"
-        "  background-color: #f5f5f5;"
-        "  padding: 8px 0;"
+        "  background: transparent;"
+        "  padding: 4px 0;"
         "}"
         "QListWidget::item {"
-        "  padding: 12px 20px;"
+        "  padding: 10px 14px;"
         "  font-size: 14px;"
         "  border: none;"
+        "  color: #cbd5df;"
+        "  border-radius: 8px;"
+        "  margin: 3px 0;"
         "}"
         "QListWidget::item:selected {"
-        "  background-color: #e0e0e0;"
+        "  background-color: #223141;"
         "  font-weight: bold;"
-        "  color: #333;"
+        "  color: #ffffff;"
         "}"
         "QListWidget::item:hover {"
-        "  background-color: #ebebeb;"
+        "  background-color: #1d2a37;"
         "}"
     );
 
@@ -122,6 +162,10 @@ void MainWindow::createNavBar()
         // 设置导航项高度
         item->setSizeHint(QSize(0, 48));
     }
+
+    panelLayout->addLayout(brandLayout);
+    panelLayout->addSpacing(8);
+    panelLayout->addWidget(m_navList, 1);
 
     connect(m_navList, &QListWidget::currentItemChanged,
             this, &MainWindow::onNavItemChanged);
@@ -139,12 +183,18 @@ void MainWindow::createPageStack()
                                       this);
     m_transferPage = new TransferCenterPage(this);
     m_sharePage    = new SharePage(this);
-    m_settingsPage = new SettingsPage(this);
+    m_settingsPage = new SettingsPage(m_app ? m_app->settings() : nullptr,
+                                      m_app ? m_app->networkPolicy() : nullptr,
+                                      m_app ? m_app->manualPeerRepository() : nullptr,
+                                      this);
 
     // 向 ChatPage 注入依赖：SignalService 和本机 peer_id
     if (m_app) {
         m_chatPage->setSignalService(m_app->signalService());
+        m_chatPage->setCourierService(m_app->courierService());
         m_chatPage->setLocalPeerId(m_app->settings()->peerId());
+        m_transferPage->setCourierService(m_app->courierService());
+        m_sharePage->setShareService(m_app->shareService());
     }
 
     // 双击联系人 → 打开聊天会话并切换到聊天页

@@ -10,6 +10,7 @@
 class QListWidget;
 class QListWidgetItem;
 class QStackedWidget;
+class QWidget;
 
 namespace FengSui {
 
@@ -50,6 +51,7 @@ private:
     void createPageStack();
 
     Application* m_app = nullptr;
+    QWidget*       m_navPanel = nullptr;
     QListWidget*   m_navList = nullptr;
     QStackedWidget* m_pageStack = nullptr;
 

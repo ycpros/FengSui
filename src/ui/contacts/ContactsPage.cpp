@@ -18,6 +18,7 @@
 
 #include "core/BeaconService.h"
 #include "storage/ManualPeerRepository.h"
+#include "ui/UiStyle.h"
 #include "ui/contacts/AddPeerDialog.h"
 
 namespace FengSui {
@@ -80,43 +81,51 @@ void ContactsPage::onItemDoubleClicked(QListWidgetItem* item)
 void ContactsPage::setupUi()
 {
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(14);
 
     // 标题栏：标题 + 添加设备按钮
     auto* header = new QWidget(this);
     auto* headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(12, 8, 12, 8);
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(12);
 
-    auto* titleLabel = new QLabel(QStringLiteral("联系人"), header);
-    titleLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
+    auto* titleBlock = new QWidget(header);
+    auto* titleLayout = new QVBoxLayout(titleBlock);
+    titleLayout->setContentsMargins(0, 0, 0, 0);
+    titleLayout->setSpacing(2);
+
+    auto* titleLabel = new QLabel(QStringLiteral("联系人"), titleBlock);
+    titleLabel->setObjectName(QStringLiteral("pageTitle"));
+    titleLabel->setStyleSheet(UiStyle::pageTitleStyle());
+
+    auto* subtitleLabel = new QLabel(QStringLiteral("自动发现和手动添加的局域网设备"), titleBlock);
+    subtitleLabel->setStyleSheet(UiStyle::mutedTextStyle());
+    titleLayout->addWidget(titleLabel);
+    titleLayout->addWidget(subtitleLabel);
 
     m_addBtn = new QPushButton(QStringLiteral("+ 添加设备"), header);
+    m_addBtn->setObjectName(QStringLiteral("addPeerButton"));
     m_addBtn->setFixedHeight(32);
-    m_addBtn->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #4a90d9; color: white; border: none;"
-        "  border-radius: 4px; padding: 4px 16px; font-size: 13px;"
-        "}"
-        "QPushButton:hover { background-color: #357abd; }"
-    );
+    m_addBtn->setStyleSheet(UiStyle::primaryButtonStyle());
 
-    headerLayout->addWidget(titleLabel, 1);
+    headerLayout->addWidget(titleBlock, 1);
     headerLayout->addWidget(m_addBtn);
 
     m_peerList = new QListWidget(this);
+    m_peerList->setObjectName(QStringLiteral("contactsPeerList"));
     m_peerList->setFocusPolicy(Qt::NoFocus);
     m_peerList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_peerList->setStyleSheet(
         "QListWidget {"
-        "  border: none;"
+        "  border: 1px solid #d8dee8; border-radius: 8px;"
         "  background-color: #ffffff;"
         "}"
         "QListWidget::item {"
-        "  border-bottom: 1px solid #eeeeee;"
+        "  border-bottom: 1px solid #eef1f5;"
         "}"
         "QListWidget::item:selected {"
-        "  background-color: #eef5ff;"
+        "  background-color: #e7f5f4;"
         "}"
     );
     connect(m_peerList,
@@ -125,8 +134,11 @@ void ContactsPage::setupUi()
             &ContactsPage::onItemDoubleClicked);
 
     m_emptyLabel = new QLabel(QStringLiteral("暂无在线设备"), this);
+    m_emptyLabel->setObjectName(QStringLiteral("contactsEmptyLabel"));
     m_emptyLabel->setAlignment(Qt::AlignCenter);
-    m_emptyLabel->setStyleSheet("color: #999; font-size: 14px;");
+    m_emptyLabel->setStyleSheet(
+        "color: #667085; font-size: 14px; background: #ffffff;"
+        "border: 1px dashed #cfd7e3; border-radius: 8px;");
 
     layout->addWidget(header);
     layout->addWidget(m_peerList, 1);
@@ -203,9 +215,9 @@ QWidget* ContactsPage::createPeerRow(const PeerInfo& peer)
     osBadgeLabel->setFixedWidth(54);
     osBadgeLabel->setAlignment(Qt::AlignCenter);
     osBadgeLabel->setStyleSheet(
-        "background-color: #f0f3f7;"
+        "background-color: #eef4ff;"
         "border-radius: 4px;"
-        "color: #2f3a45;"
+        "color: #175cd3;"
         "font-size: 12px;"
         "font-weight: bold;"
         "padding: 4px;"
@@ -217,23 +229,20 @@ QWidget* ContactsPage::createPeerRow(const PeerInfo& peer)
     textLayout->setSpacing(2);
 
     auto* nameLabel = new QLabel(peer.displayName, textContainer);
-    nameLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #222;");
+    nameLabel->setStyleSheet("font-size: 14px; font-weight: 700; color: #101828;");
 
     const QString detailText = QStringLiteral("%1  %2")
                                    .arg(peer.deviceName, endpointText(peer));
     auto* detailLabel = new QLabel(detailText, textContainer);
-    detailLabel->setStyleSheet("font-size: 12px; color: #666;");
+    detailLabel->setStyleSheet("font-size: 12px; color: #667085;");
 
     textLayout->addWidget(nameLabel);
     textLayout->addWidget(detailLabel);
 
     auto* statusLabel = new QLabel(QStringLiteral("在线"), row);
     statusLabel->setAlignment(Qt::AlignCenter);
-    statusLabel->setStyleSheet(
-        "color: #187a3b;"
-        "font-size: 12px;"
-        "font-weight: bold;"
-    );
+    statusLabel->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#e7f5f4"),
+                                                  QStringLiteral("#0f6f70")));
 
     rowLayout->addWidget(osBadgeLabel);
     rowLayout->addWidget(textContainer, 1);

@@ -16,12 +16,15 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
 
 namespace FengSui {
 
+class CourierService;
 class SignalService;
+struct TransferTask;
 
 // 聊天页面：QSplitter 分左右两栏。
 // 左侧：会话列表（QListWidget），显示所有会话及最后消息摘要。
@@ -34,6 +37,9 @@ public:
 
     // 依赖注入：设置信号服务（由 MainWindow 在构造时调用）。
     void setSignalService(SignalService* service);
+
+    // 依赖注入：设置文件传输服务（由 MainWindow 在构造时调用）。
+    void setCourierService(CourierService* service);
 
     // 依赖注入：设置本机 peer_id（用于判断消息是否为自己发送）。
     void setLocalPeerId(const QString& peerId);
@@ -59,6 +65,9 @@ private slots:
 
     // 会话元信息变更（最后消息、未读计数）
     void onConversationUpdated(const QString& conversationId);
+
+    // 收到新的文件传输请求。
+    void onTransferRequested(const TransferTask& task);
 
 private:
     // 构建界面布局
@@ -88,10 +97,14 @@ private:
     // 判断用户是否已滚动到接近底部（用于智能自动滚动）
     bool isNearBottom() const;
 
+    // 处理拖入的本地文件 URL。
+    bool handleDroppedUrls(const QList<QUrl>& urls);
+
     // 事件过滤器：处理输入框 Enter/Shift+Enter 键
     bool eventFilter(QObject* obj, QEvent* event) override;
 
     SignalService* m_signalService = nullptr;
+    CourierService* m_courierService = nullptr;
     QString m_localPeerId;
     PeerInfo m_activePeer;
     QString m_activeConversationId;
@@ -107,9 +120,11 @@ private:
     QWidget*        m_chatPanel = nullptr;
     QLabel*         m_peerNameLabel = nullptr;
     QLabel*         m_peerStatusLabel = nullptr;
+    QLabel*         m_offlineHintLabel = nullptr;
     QScrollArea*    m_messageScroll = nullptr;
     QWidget*        m_messageContainer = nullptr;
     QVBoxLayout*    m_messageLayout = nullptr;
+    QLabel*         m_dropHintLabel = nullptr;
     QTextEdit*      m_inputEdit = nullptr;
     QPushButton*    m_sendBtn = nullptr;
 

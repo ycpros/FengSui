@@ -18,6 +18,8 @@ class Database;
 class ManualPeerRepository;
 class MessageRepository;
 class SettingsRepository;
+class ShareRepository;
+class ShareService;
 class SignalService;
 class TransferRepository;
 
@@ -88,6 +90,9 @@ public:
     // 获取文件传输编排服务实例。
     CourierService* courierService() const;
 
+    // 获取本机共享目录管理服务实例。
+    ShareService* shareService() const;
+
     // 获取当前运行时网络策略。
     NetworkPolicy* networkPolicy() const;
 
@@ -111,6 +116,8 @@ private:
     ConversationRepository* m_conversationRepo = nullptr;
     MessageRepository*      m_messageRepo = nullptr;
     ManualPeerRepository*   m_manualPeerRepo = nullptr;
+    ShareRepository*        m_shareRepo = nullptr;
+    ShareService*           m_shareService = nullptr;
     TransferRepository*     m_transferRepo = nullptr;
     NetworkPolicy*          m_networkPolicy = nullptr;
 };

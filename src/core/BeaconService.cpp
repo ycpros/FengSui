@@ -4,6 +4,7 @@
 #include "core/BeaconService.h"
 
 #include "app/AppSettings.h"
+#include "core/ShareService.h"
 #include "models/NetworkPolicy.h"
 #include "network/UdpDiscovery.h"
 #include "platform/InterfaceEnumerator.h"
@@ -104,6 +105,28 @@ void BeaconService::setNetworkPolicy(NetworkPolicy* networkPolicy)
     m_networkPolicy = networkPolicy;
 }
 
+void BeaconService::setShareService(ShareService* shareService)
+{
+    if (m_shareService == shareService) {
+        return;
+    }
+    if (m_shareService) {
+        disconnect(m_shareService, nullptr, this, nullptr);
+    }
+
+    m_shareService = shareService;
+    if (m_shareService) {
+        connect(m_shareService,
+                &ShareService::shareAvailabilityChanged,
+                this,
+                [this](bool) {
+                    if (m_running) {
+                        sendHello();
+                    }
+                });
+    }
+}
+
 bool BeaconService::start(QString& errorOut)
 {
     if (m_running) {
@@ -197,7 +220,8 @@ QJsonObject BeaconService::buildHelloPayload(const DiscoveryEndpoint& endpoint) 
     payload.insert(QStringLiteral("ip"), endpoint.ip.toString());
     payload.insert(QStringLiteral("tcp_port"), static_cast<int>(endpoint.tcpPort));
     payload.insert(QStringLiteral("os"), platformOs());
-    payload.insert(QStringLiteral("share_enabled"), false);
+    payload.insert(QStringLiteral("share_enabled"),
+                   m_shareService ? m_shareService->hasActiveShares() : false);
     payload.insert(QStringLiteral("version"), QCoreApplication::applicationVersion());
 
     QJsonObject address;

@@ -6,12 +6,14 @@
 #include "app/Logger.h"
 #include "core/BeaconService.h"
 #include "core/CourierService.h"
+#include "core/ShareService.h"
 #include "core/SignalService.h"
 #include "storage/ConversationRepository.h"
 #include "storage/Database.h"
 #include "storage/ManualPeerRepository.h"
 #include "storage/MessageRepository.h"
 #include "storage/SettingsRepository.h"
+#include "storage/ShareRepository.h"
 #include "storage/TransferRepository.h"
 #include "models/NetworkPolicy.h"
 #include "platform/InterfaceEnumerator.h"
@@ -109,8 +111,14 @@ Application::~Application()
     delete m_beaconService;
     m_beaconService = nullptr;
 
+    delete m_shareService;
+    m_shareService = nullptr;
+
     delete m_transferRepo;
     m_transferRepo = nullptr;
+
+    delete m_shareRepo;
+    m_shareRepo = nullptr;
 
     delete m_manualPeerRepo;
     m_manualPeerRepo = nullptr;
@@ -155,13 +163,19 @@ bool Application::initialize()
     m_networkPolicy = new NetworkPolicy();
     reloadNetworkPolicyFromSettings();
 
-    // 6. 创建局域网发现服务。是否启动由 main() 在首次向导完成后决定。
-    m_beaconService = new BeaconService(m_settings, m_networkPolicy, this);
+    // 6. 创建共享目录仓库与服务，供发现广播和共享页面使用。
+    m_shareRepo = new ShareRepository(m_database, this);
+    m_shareService = new ShareService(this);
+    m_shareService->setShareRepository(m_shareRepo);
 
-    // 7. 创建 TCP 消息服务。是否启动由 main() 在首次向导完成后决定。
+    // 7. 创建局域网发现服务。是否启动由 main() 在首次向导完成后决定。
+    m_beaconService = new BeaconService(m_settings, m_networkPolicy, this);
+    m_beaconService->setShareService(m_shareService);
+
+    // 8. 创建 TCP 消息服务。是否启动由 main() 在首次向导完成后决定。
     m_signalService = new SignalService(m_settings, m_networkPolicy, this);
 
-    // 8. 创建消息存储仓库，注入到 SignalService 以实现消息持久化
+    // 9. 创建消息存储仓库，注入到 SignalService 以实现消息持久化
     m_conversationRepo = new ConversationRepository(m_database,
                                                      m_settings->peerId(),
                                                      this);
@@ -169,18 +183,19 @@ bool Application::initialize()
     m_signalService->setConversationRepository(m_conversationRepo);
     m_signalService->setMessageRepository(m_messageRepo);
 
-    // 9. 创建手动添加设备仓库和传输任务存储仓库
+    // 10. 创建手动添加设备仓库和传输任务存储仓库
     m_manualPeerRepo = new ManualPeerRepository(m_database, this);
     m_transferRepo = new TransferRepository(m_database, this);
 
-    // 10. 创建文件传输编排服务，注入依赖
+    // 11. 创建文件传输编排服务，注入依赖
     m_courierService = new CourierService(this);
     m_courierService->setSignalService(m_signalService);
+    m_courierService->setAppSettings(m_settings);
     m_courierService->setTransferRepository(m_transferRepo);
     m_courierService->setLocalPeerId(m_settings->peerId());
     m_signalService->setCourierService(m_courierService);
 
-    // 11. 注册元类型，使模型结构体可通过 Qt signal/slot 跨线程传递
+    // 12. 注册元类型，使模型结构体可通过 Qt signal/slot 跨线程传递
     qRegisterMetaType<FengSui::Message>("FengSui::Message");
     qRegisterMetaType<FengSui::Conversation>("FengSui::Conversation");
     qRegisterMetaType<FengSui::TransferTask>("FengSui::TransferTask");
@@ -286,6 +301,11 @@ void Application::stopCourierService()
 CourierService* Application::courierService() const
 {
     return m_courierService;
+}
+
+ShareService* Application::shareService() const
+{
+    return m_shareService;
 }
 
 NetworkPolicy* Application::networkPolicy() const

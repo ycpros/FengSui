@@ -2,6 +2,7 @@
 // 文件传输编排服务实现：传输生命周期管理、分块收发、SHA-256 校验。
 
 #include "core/CourierService.h"
+#include "app/AppSettings.h"
 #include "core/SignalService.h"
 #include "network/Protocol.h"
 #include "network/TcpConnection.h"
@@ -10,9 +11,11 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonObject>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
 
@@ -20,12 +23,50 @@ namespace FengSui {
 
 namespace {
 
-// 分块读取/写入缓冲大小（每次 read/write 的单位）
-constexpr int kIOBufferSize = 1024 * 1024;  // 1 MB
+// 协议约定的传输块大小。TcpConnection 也按 8MB 作为单块上限。
+constexpr quint32 kTransferChunkSize = 8 * 1024 * 1024;
+
+// SHA-256 计算缓冲，独立于网络块大小，避免计算 hash 时占用过大临时内存。
+constexpr int kHashBufferSize = 1024 * 1024;
 
 // 发送完一块后通过 QTimer::singleShot(0, ...) 让出事件循环，
 // 保证 UI 刷新和进度更新不被大文件传输阻塞。
 constexpr int kChunkSendYieldMs = 0;
+
+QString sanitizedFileName(const QString& fileName)
+{
+    QString normalized = fileName;
+    normalized.replace(QLatin1Char('\\'), QLatin1Char('/'));
+
+    QString safeName = QFileInfo(normalized).fileName().trimmed();
+    if (safeName.isEmpty() || safeName == QStringLiteral(".")
+        || safeName == QStringLiteral("..")) {
+        safeName = QStringLiteral("fengsui-download");
+    }
+    return safeName;
+}
+
+QString uniqueFilePath(const QString& directoryPath, const QString& fileName)
+{
+    const QDir dir(directoryPath);
+    const QString safeName = sanitizedFileName(fileName);
+    const QFileInfo safeInfo(safeName);
+    const QString baseName = safeInfo.completeBaseName().isEmpty()
+        ? safeInfo.fileName()
+        : safeInfo.completeBaseName();
+    const QString suffix = safeInfo.suffix();
+
+    QString candidate = dir.filePath(safeName);
+    int index = 1;
+    while (QFileInfo::exists(candidate)) {
+        const QString numberedName = suffix.isEmpty()
+            ? QStringLiteral("%1 (%2)").arg(baseName).arg(index)
+            : QStringLiteral("%1 (%2).%3").arg(baseName).arg(index).arg(suffix);
+        candidate = dir.filePath(numberedName);
+        ++index;
+    }
+    return candidate;
+}
 
 } // namespace
 
@@ -58,6 +99,11 @@ CourierService::~CourierService()
 void CourierService::setSignalService(SignalService* service)
 {
     m_signalService = service;
+}
+
+void CourierService::setAppSettings(AppSettings* settings)
+{
+    m_settings = settings;
 }
 
 void CourierService::setTransferRepository(TransferRepository* repo)
@@ -103,6 +149,7 @@ QString CourierService::sendFile(const PeerInfo& peer, const QString& filePath)
     ctx.task.createdAt = QDateTime::currentDateTimeUtc();
     ctx.peer = peer;
     ctx.isOutgoing = true;
+    ctx.chunkSize = kTransferChunkSize;
 
     // 打开发送文件
     ctx.file = new QFile(filePath);
@@ -126,7 +173,7 @@ QString CourierService::sendFile(const PeerInfo& peer, const QString& filePath)
     if (m_signalService) {
         const QJsonObject request = Protocol::buildTransferRequest(
             transferId, m_localPeerId, peer.peerId, fileName, fileSize, sha256,
-            kIOBufferSize, false);
+            ctx.chunkSize, false);
 
         // 通过 SignalService 发送 JSON 控制消息并获取连接
         TcpConnection* conn = m_signalService->sendJsonMessage(peer, request);
@@ -168,13 +215,44 @@ void CourierService::acceptTransfer(const QString& transferId)
         return;
     }
 
+    QFileInfo targetInfo(ctx.task.filePath);
+    QDir targetDir = targetInfo.absoluteDir();
+    if (!targetDir.exists() && !QDir().mkpath(targetDir.absolutePath())) {
+        const QString error = QStringLiteral("无法创建下载目录: %1")
+                                  .arg(targetDir.absolutePath());
+        sendTransferError(transferId, QStringLiteral("DISK_ERROR"), error);
+        finishTransfer(transferId, false, error);
+        return;
+    }
+    if (QFileInfo::exists(ctx.task.filePath)) {
+        ctx.task.filePath = uniqueFilePath(targetDir.absolutePath(),
+                                           ctx.task.fileName);
+        if (m_transferRepo) {
+            m_transferRepo->saveTask(ctx.task);
+        }
+    }
+
+    ctx.file = new QFile(ctx.task.filePath);
+    if (!ctx.file->open(QIODevice::WriteOnly)) {
+        const QString error = QStringLiteral("无法保存文件: %1")
+                                  .arg(ctx.file->errorString());
+        delete ctx.file;
+        ctx.file = nullptr;
+        sendTransferError(transferId, QStringLiteral("DISK_ERROR"), error);
+        finishTransfer(transferId, false, error);
+        return;
+    }
+
     // 发送 transfer.accept
     TcpConnection* conn = findConnectionForTransfer(transferId);
     if (conn && conn->isConnected()) {
         const QJsonObject accept = Protocol::buildTransferAccept(transferId);
         conn->sendMessage(accept);
     } else {
+        const QString error = QStringLiteral("对端连接已断开");
         qWarning() << "acceptTransfer: no connection for transfer" << transferId;
+        finishTransfer(transferId, false, error);
+        return;
     }
 
     // 更新状态为传输中
@@ -207,8 +285,10 @@ void CourierService::rejectTransfer(const QString& transferId, const QString& re
     }
 
     // 更新状态并清理
-    finishTransfer(transferId, false,
-                   reason.isEmpty() ? QStringLiteral("对方已拒绝") : reason);
+    const QString rejectMessage = reason.isEmpty()
+        ? QStringLiteral("已拒绝")
+        : QStringLiteral("已拒绝: %1").arg(reason);
+    finishTransfer(transferId, false, rejectMessage);
 }
 
 void CourierService::cancelTransfer(const QString& transferId)
@@ -230,6 +310,24 @@ void CourierService::cancelTransfer(const QString& transferId)
     }
 
     finishTransfer(transferId, false, QStringLiteral("传输已取消"));
+}
+
+void CourierService::handlePeerDisconnected(const QString& peerId)
+{
+    if (peerId.trimmed().isEmpty()) {
+        return;
+    }
+
+    const QList<QString> ids = m_activeTransfers.keys();
+    for (const QString& transferId : ids) {
+        auto it = m_activeTransfers.find(transferId);
+        if (it == m_activeTransfers.end()) {
+            continue;
+        }
+        if (it.value().peer.peerId == peerId) {
+            finishTransfer(transferId, false, QStringLiteral("对端连接已断开"));
+        }
+    }
 }
 
 // ---- 消息入口（由 SignalService 调用） ----
@@ -277,6 +375,19 @@ void CourierService::handleChunkData(const QString& transferId,
 
     if (!ctx.file || !ctx.file->isOpen()) {
         qWarning() << "handleChunkData: file not open for transfer" << transferId;
+        sendTransferError(transferId,
+                          QStringLiteral("TRANSFER_NOT_READY"),
+                          QStringLiteral("接收文件尚未准备好"));
+        finishTransfer(transferId, false, QStringLiteral("接收文件尚未准备好"));
+        return;
+    }
+
+    if (chunkIndex != ctx.nextChunkIndex) {
+        const QString error = QStringLiteral("数据块顺序错误: 期望 %1，收到 %2")
+                                  .arg(ctx.nextChunkIndex)
+                                  .arg(chunkIndex);
+        sendTransferError(transferId, QStringLiteral("CHUNK_ORDER_ERROR"), error);
+        finishTransfer(transferId, false, error);
         return;
     }
 
@@ -289,6 +400,9 @@ void CourierService::handleChunkData(const QString& transferId,
     if (bytesWritten != data.size()) {
         qWarning() << "handleChunkData: short write for transfer" << transferId
                    << "expected" << data.size() << "wrote" << bytesWritten;
+        sendTransferError(transferId,
+                          QStringLiteral("DISK_ERROR"),
+                          QStringLiteral("写入文件失败: %1").arg(ctx.file->errorString()));
         finishTransfer(transferId, false,
                        QStringLiteral("写入文件失败: %1").arg(ctx.file->errorString()));
         return;
@@ -301,6 +415,7 @@ void CourierService::handleChunkData(const QString& transferId,
 
     // 更新进度
     ctx.task.transferredBytes += data.size();
+    ctx.nextChunkIndex++;
     if (m_transferRepo) {
         m_transferRepo->updateProgress(transferId, ctx.task.transferredBytes);
     }
@@ -319,8 +434,11 @@ void CourierService::handleTransferRequest(TcpConnection* connection,
     const qint64 fileSize = static_cast<qint64>(
         message.value(QStringLiteral("file_size")).toDouble());
     const QString sha256 = message.value(QStringLiteral("sha256")).toString();
-    const quint32 chunkSize = static_cast<quint32>(
-        message.value(QStringLiteral("chunk_size")).toInt(8388608));
+    const qint64 requestedChunkSize =
+        static_cast<qint64>(message.value(QStringLiteral("chunk_size")).toDouble(kTransferChunkSize));
+    const quint32 chunkSize = requestedChunkSize > 0
+        ? static_cast<quint32>(qMin<qint64>(requestedChunkSize, kTransferChunkSize))
+        : kTransferChunkSize;
     const bool isFolder = message.value(QStringLiteral("is_folder")).toBool(false);
 
     if (transferId.isEmpty() || fromPeerId.isEmpty() || fileName.isEmpty()) {
@@ -328,17 +446,30 @@ void CourierService::handleTransferRequest(TcpConnection* connection,
         return;
     }
 
-    // 确定保存路径（默认下载目录 + 文件名）
-    // 下载目录从 settings 获取（暂时使用临时目录，后续在集成时完善）
-    const QString downloadDir = ".";  // FIXME: 从 AppSettings 获取下载目录
-    const QString savePath = downloadDir + "/" + fileName;
+    if (isFolder) {
+        const QJsonObject error = Protocol::buildTransferReject(
+            transferId,
+            QStringLiteral("文件夹传输暂未实现"));
+        connection->sendMessage(error);
+        return;
+    }
+
+    QString downloadDir = m_settings ? m_settings->downloadDir() : QString();
+    if (downloadDir.trimmed().isEmpty()) {
+        downloadDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    }
+    if (downloadDir.trimmed().isEmpty()) {
+        downloadDir = QDir::currentPath();
+    }
+    const QString safeFileName = sanitizedFileName(fileName);
+    const QString savePath = uniqueFilePath(downloadDir, safeFileName);
 
     // 构建传输上下文（接收方）
     TransferContext ctx;
     ctx.task.transferId = transferId;
     ctx.task.direction = TransferDirection::Download;
     ctx.task.peerId = fromPeerId;
-    ctx.task.fileName = fileName;
+    ctx.task.fileName = safeFileName;
     ctx.task.filePath = savePath;
     ctx.task.fileSize = fileSize;
     ctx.task.sha256 = sha256;
@@ -399,8 +530,10 @@ void CourierService::handleTransferReject(const QJsonObject& message)
     const QString transferId = message.value(QStringLiteral("transfer_id")).toString();
     const QString reason = message.value(QStringLiteral("reason")).toString();
 
-    finishTransfer(transferId, false,
-                   reason.isEmpty() ? QStringLiteral("对方已拒绝") : reason);
+    const QString rejectMessage = reason.isEmpty()
+        ? QStringLiteral("对方已拒绝")
+        : QStringLiteral("对方已拒绝: %1").arg(reason);
+    finishTransfer(transferId, false, rejectMessage);
     emit transferRejected(transferId, reason);
 }
 
@@ -418,6 +551,11 @@ void CourierService::handleTransferComplete(const QJsonObject& message)
     TransferContext& ctx = it.value();
     if (ctx.isOutgoing) {
         qWarning() << "handleTransferComplete: transfer" << transferId << "is outgoing";
+        return;
+    }
+
+    if (!ctx.file || !ctx.file->isOpen()) {
+        finishTransfer(transferId, false, QStringLiteral("接收文件尚未打开"));
         return;
     }
 
@@ -442,6 +580,9 @@ void CourierService::handleTransferComplete(const QJsonObject& message)
         errorMsg = QStringLiteral("SHA-256 校验失败");
     }
 
+    if (success && !localSha256.isEmpty()) {
+        ctx.task.sha256 = localSha256;
+    }
     finishTransfer(transferId, success, errorMsg);
 }
 
@@ -563,22 +704,12 @@ void CourierService::finishTransfer(const QString& transferId, bool success,
         ctx.file = nullptr;
     }
 
-    // 释放 SHA-256 累加器
-    if (ctx.hasher) {
-        delete ctx.hasher;
-        ctx.hasher = nullptr;
-    }
-
     // 更新持久化状态
     if (m_transferRepo) {
         if (success) {
-            QString sha256;
-            // 接收方：使用本地计算的 SHA-256
-            if (!ctx.isOutgoing && ctx.hasher) {
-                sha256 = QString::fromLatin1(ctx.hasher->result().toHex());
-            }
+            const QString sha256 = ctx.task.sha256;
             m_transferRepo->markCompleted(transferId,
-                                          ctx.isOutgoing ? ctx.task.sha256 : QString());
+                                          sha256);
         } else {
             TransferStatus failStatus = TransferStatus::Failed;
             if (errorMessage.contains(QStringLiteral("取消"))
@@ -590,6 +721,12 @@ void CourierService::finishTransfer(const QString& transferId, bool success,
             }
             m_transferRepo->updateStatus(transferId, failStatus, errorMessage);
         }
+    }
+
+    // 释放 SHA-256 累加器。必须在持久化之后，接收方 hash 已在 complete 处理中写回 task。
+    if (ctx.hasher) {
+        delete ctx.hasher;
+        ctx.hasher = nullptr;
     }
 
     // 发射信号
@@ -621,10 +758,10 @@ QString CourierService::computeFileSha256(const QString& filePath)
 
     QCryptographicHash hasher(QCryptographicHash::Sha256);
     QByteArray buffer;
-    buffer.resize(kIOBufferSize);
+    buffer.resize(kHashBufferSize);
 
     while (!file.atEnd()) {
-        const qint64 bytesRead = file.read(buffer.data(), kIOBufferSize);
+        const qint64 bytesRead = file.read(buffer.data(), kHashBufferSize);
         if (bytesRead > 0) {
             hasher.addData(QByteArrayView(buffer.constData(),
                                           static_cast<int>(bytesRead)));
@@ -648,6 +785,22 @@ TcpConnection* CourierService::findConnectionForTransfer(const QString& transfer
     }
 
     return nullptr;
+}
+
+void CourierService::sendTransferError(const QString& transferId,
+                                       const QString& errorCode,
+                                       const QString& errorMessage)
+{
+    TcpConnection* conn = findConnectionForTransfer(transferId);
+    if (!conn || !conn->isConnected()) {
+        return;
+    }
+
+    const QJsonObject error = Protocol::buildTransferError(
+        transferId,
+        errorCode,
+        errorMessage);
+    conn->sendMessage(error);
 }
 
 // ---- 查询 ----

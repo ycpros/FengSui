@@ -33,8 +33,10 @@ set(SOURCES
     src/storage/ManualPeerRepository.cpp
     src/storage/MessageRepository.cpp
     src/storage/SettingsRepository.cpp
+    src/storage/ShareRepository.cpp
     src/storage/TransferRepository.cpp
     # ui 层
+    src/ui/UiStyle.cpp
     src/ui/MainWindow.cpp
     src/ui/onboarding/OnboardingWizard.cpp
     src/ui/chat/ChatPage.cpp
@@ -45,10 +47,12 @@ set(SOURCES
     src/ui/settings/SettingsPage.cpp
     src/ui/diagnostics/DiagnosticsPage.cpp
     src/ui/dropbox/DropboxPage.cpp
+    src/ui/share/ShareAccessDialog.cpp
     src/ui/tray/TrayManager.cpp
     # core 层
     src/core/BeaconService.cpp
     src/core/CourierService.cpp
+    src/core/ShareService.cpp
     src/core/SignalService.cpp
     src/core/TcpProbe.cpp
     # network 层
@@ -82,8 +86,10 @@ set(HEADERS
     src/storage/ManualPeerRepository.h
     src/storage/MessageRepository.h
     src/storage/SettingsRepository.h
+    src/storage/ShareRepository.h
     src/storage/TransferRepository.h
     # ui 层
+    src/ui/UiStyle.h
     src/ui/MainWindow.h
     src/ui/onboarding/OnboardingWizard.h
     src/ui/chat/ChatPage.h
@@ -94,10 +100,12 @@ set(HEADERS
     src/ui/settings/SettingsPage.h
     src/ui/diagnostics/DiagnosticsPage.h
     src/ui/dropbox/DropboxPage.h
+    src/ui/share/ShareAccessDialog.h
     src/ui/tray/TrayManager.h
     # core 层
     src/core/BeaconService.h
     src/core/CourierService.h
+    src/core/ShareService.h
     src/core/SignalService.h
     src/core/TcpProbe.h
     # network 层
@@ -190,19 +198,145 @@ fengsui_add_qttest(tst_signal_service
     src/storage/TransferRepository.cpp
 )
 
+fengsui_add_qttest(tst_courier_service
+    src/tests/tst_courier_service.cpp
+    src/app/AppSettings.cpp
+    src/core/CourierService.cpp
+    src/core/SignalService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
+    src/network/TcpServer.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/storage/ConversationRepository.cpp
+    src/storage/Database.cpp
+    src/storage/MessageRepository.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/TransferRepository.cpp
+)
+
+fengsui_add_qttest(tst_transfer_center_page
+    src/tests/tst_transfer_center_page.cpp
+    src/ui/UiStyle.cpp
+    src/app/AppSettings.cpp
+    src/core/CourierService.cpp
+    src/core/SignalService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
+    src/network/TcpServer.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/storage/ConversationRepository.cpp
+    src/storage/Database.cpp
+    src/storage/MessageRepository.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/TransferRepository.cpp
+    src/ui/transfer_center/TransferCenterPage.cpp
+)
+
 fengsui_add_qttest(tst_add_peer_dialog
     src/tests/tst_add_peer_dialog.cpp
     src/core/TcpProbe.cpp
     src/ui/contacts/AddPeerDialog.cpp
 )
 
-fengsui_add_qttest(tst_beacon_policy
-    src/tests/tst_beacon_policy.cpp
+fengsui_add_qttest(tst_settings_page
+    src/tests/tst_settings_page.cpp
     src/app/AppSettings.cpp
     src/core/BeaconService.cpp
+    src/core/ShareService.cpp
+    src/network/UdpDiscovery.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/platform/PlatformUtils.cpp
+    src/storage/Database.cpp
+    src/storage/ManualPeerRepository.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/ShareRepository.cpp
+    src/ui/UiStyle.cpp
+    src/ui/diagnostics/DiagnosticsPage.cpp
+    src/ui/settings/SettingsPage.cpp
+)
+
+fengsui_add_qttest(tst_share_page
+    src/tests/tst_share_page.cpp
+    src/core/ShareService.cpp
+    src/storage/Database.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/ShareRepository.cpp
+    src/ui/UiStyle.cpp
+    src/ui/share/SharePage.cpp
+)
+
+fengsui_add_qttest(tst_share_service
+    src/tests/tst_share_service.cpp
+    src/core/ShareService.cpp
+    src/storage/Database.cpp
+    src/storage/ShareRepository.cpp
+)
+
+fengsui_add_qttest(tst_diagnostics_page
+    src/tests/tst_diagnostics_page.cpp
+    src/app/AppSettings.cpp
+    src/core/BeaconService.cpp
+    src/core/ShareService.cpp
     src/network/UdpDiscovery.cpp
     src/platform/InterfaceEnumerator.cpp
     src/platform/PlatformUtils.cpp
     src/storage/Database.cpp
     src/storage/SettingsRepository.cpp
+    src/storage/ShareRepository.cpp
+    src/ui/UiStyle.cpp
+    src/ui/diagnostics/DiagnosticsPage.cpp
+)
+
+fengsui_add_qttest(tst_share_access_dialog
+    src/tests/tst_share_access_dialog.cpp
+    src/ui/UiStyle.cpp
+    src/ui/share/ShareAccessDialog.cpp
+)
+
+fengsui_add_qttest(tst_main_window_navigation
+    src/tests/tst_main_window_navigation.cpp
+    src/app/AppSettings.cpp
+    src/app/Application.cpp
+    src/app/Logger.cpp
+    src/core/BeaconService.cpp
+    src/core/CourierService.cpp
+    src/core/ShareService.cpp
+    src/core/SignalService.cpp
+    src/core/TcpProbe.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
+    src/network/TcpServer.cpp
+    src/network/UdpDiscovery.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/platform/PlatformUtils.cpp
+    src/storage/ConversationRepository.cpp
+    src/storage/Database.cpp
+    src/storage/ManualPeerRepository.cpp
+    src/storage/MessageRepository.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/ShareRepository.cpp
+    src/storage/TransferRepository.cpp
+    src/ui/UiStyle.cpp
+    src/ui/MainWindow.cpp
+    src/ui/chat/ChatPage.cpp
+    src/ui/contacts/AddPeerDialog.cpp
+    src/ui/contacts/ContactsPage.cpp
+    src/ui/diagnostics/DiagnosticsPage.cpp
+    src/ui/settings/SettingsPage.cpp
+    src/ui/share/ShareAccessDialog.cpp
+    src/ui/share/SharePage.cpp
+    src/ui/transfer_center/TransferCenterPage.cpp
+)
+
+fengsui_add_qttest(tst_beacon_policy
+    src/tests/tst_beacon_policy.cpp
+    src/app/AppSettings.cpp
+    src/core/BeaconService.cpp
+    src/core/ShareService.cpp
+    src/network/UdpDiscovery.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/platform/PlatformUtils.cpp
+    src/storage/Database.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/ShareRepository.cpp
 )
