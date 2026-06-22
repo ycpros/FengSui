@@ -25,6 +25,7 @@ class ConversationRepository;
 class CourierService;
 class MessageRepository;
 class NetworkPolicy;
+class ShareService;
 class TcpConnection;
 class TcpServer;
 
@@ -101,6 +102,9 @@ public:
 
     // 注入文件传输编排服务。由 Application 在初始化时调用。
     void setCourierService(CourierService* service);
+
+    // 注入共享目录服务。由 Application 在初始化时调用。
+    void setShareService(ShareService* service);
 
     // 获取已注入的会话仓库（保留给 core 内部和测试辅助，UI 层不应直接调用）。
     ConversationRepository* conversationRepository() const;
@@ -207,6 +211,7 @@ private:
     void failPendingMessages(const QString& peerId, const QString& errorMessage);
 
     QList<BindEndpoint> buildBindEndpoints() const;
+    void connectConnectionServices(TcpConnection* connection);
 
     AppSettings* m_settings = nullptr;
     NetworkPolicy* m_networkPolicy = nullptr;
@@ -227,6 +232,7 @@ private:
     ConversationRepository* m_conversationRepo = nullptr;
     MessageRepository*      m_messageRepo = nullptr;
     CourierService*         m_courierService = nullptr;
+    QObject*                m_shareService = nullptr;
 };
 
 } // namespace FengSui

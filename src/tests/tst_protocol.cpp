@@ -4,6 +4,7 @@
 #include "network/Protocol.h"
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QtEndian>
 #include <QtTest/QtTest>
@@ -18,6 +19,7 @@ private slots:
     void extractFrameWaitsForPartialPayload();
     void extractFrameRejectsOversizedPayload();
     void chunkFrameRoundTrip();
+    void shareProtocolBuilders();
 };
 
 void ProtocolTest::packExtractUnpackRoundTrip()
@@ -95,6 +97,61 @@ void ProtocolTest::chunkFrameRoundTrip()
     QCOMPARE(chunkIndex, 7U);
     QCOMPARE(parsedPayload, payload);
     QVERIFY(FengSui::Protocol::isLikelyChunkFrame(frame));
+}
+
+void ProtocolTest::shareProtocolBuilders()
+{
+    const QJsonObject list = FengSui::Protocol::buildShareListRequest(
+        QStringLiteral("sr_001"),
+        QStringLiteral("peer_a"),
+        QStringLiteral("peer_b"));
+    QVERIFY(FengSui::Protocol::isShareMessage(list));
+    QCOMPARE(FengSui::Protocol::messageType(list), QStringLiteral("share.list"));
+    QCOMPARE(list.value(QStringLiteral("request_id")).toString(),
+             QStringLiteral("sr_001"));
+
+    QJsonArray shares;
+    QJsonObject share;
+    share.insert(QStringLiteral("share_id"), QStringLiteral("sh_001"));
+    share.insert(QStringLiteral("display_name"), QStringLiteral("Design"));
+    share.insert(QStringLiteral("file_count"), 2);
+    shares.append(share);
+    const QJsonObject listReply = FengSui::Protocol::buildShareListReply(
+        QStringLiteral("sr_001"),
+        QStringLiteral("peer_b"),
+        QStringLiteral("peer_a"),
+        shares);
+    QVERIFY(FengSui::Protocol::isShareMessage(listReply));
+    QCOMPARE(listReply.value(QStringLiteral("shares")).toArray().size(), 1);
+
+    const QJsonObject items = FengSui::Protocol::buildShareItemsRequest(
+        QStringLiteral("sr_002"),
+        QStringLiteral("peer_a"),
+        QStringLiteral("peer_b"),
+        QStringLiteral("sh_001"),
+        QStringLiteral("/docs"));
+    QCOMPARE(FengSui::Protocol::messageType(items), QStringLiteral("share.items"));
+    QCOMPARE(items.value(QStringLiteral("path")).toString(), QStringLiteral("/docs"));
+
+    const QJsonObject download = FengSui::Protocol::buildShareDownloadRequest(
+        QStringLiteral("sd_001"),
+        QStringLiteral("peer_a"),
+        QStringLiteral("peer_b"),
+        QStringLiteral("sh_001"),
+        QStringLiteral("/docs/a.txt"));
+    QVERIFY(FengSui::Protocol::isShareMessage(download));
+    QCOMPARE(download.value(QStringLiteral("download_id")).toString(),
+             QStringLiteral("sd_001"));
+
+    const QJsonObject error = FengSui::Protocol::buildShareError(
+        QStringLiteral("sd_001"),
+        QStringLiteral("peer_b"),
+        QStringLiteral("peer_a"),
+        QStringLiteral("ACCESS_DENIED"),
+        QStringLiteral("访问被拒绝"));
+    QCOMPARE(FengSui::Protocol::messageType(error), QStringLiteral("share.error"));
+    QCOMPARE(error.value(QStringLiteral("error_code")).toString(),
+             QStringLiteral("ACCESS_DENIED"));
 }
 
 } // namespace

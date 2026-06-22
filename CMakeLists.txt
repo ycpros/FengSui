@@ -28,8 +28,10 @@ set(SOURCES
     src/app/Logger.cpp
     src/app/AppSettings.cpp
     # storage 层
+    src/storage/AccessGrantRepository.cpp
     src/storage/ConversationRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/ManualPeerRepository.cpp
     src/storage/MessageRepository.cpp
     src/storage/SettingsRepository.cpp
@@ -81,8 +83,10 @@ set(HEADERS
     src/models/AccessGrant.h
     src/models/DownloadLog.h
     # storage 层
+    src/storage/AccessGrantRepository.h
     src/storage/ConversationRepository.h
     src/storage/Database.h
+    src/storage/DownloadLogRepository.h
     src/storage/ManualPeerRepository.h
     src/storage/MessageRepository.h
     src/storage/SettingsRepository.h
@@ -176,10 +180,13 @@ fengsui_add_qttest(tst_protocol
 
 fengsui_add_qttest(tst_storage
     src/tests/tst_storage.cpp
+    src/storage/AccessGrantRepository.cpp
     src/storage/ConversationRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/ManualPeerRepository.cpp
     src/storage/MessageRepository.cpp
+    src/storage/ShareRepository.cpp
 )
 
 fengsui_add_qttest(tst_signal_service
@@ -243,10 +250,14 @@ fengsui_add_qttest(tst_settings_page
     src/app/AppSettings.cpp
     src/core/BeaconService.cpp
     src/core/ShareService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
     src/network/UdpDiscovery.cpp
     src/platform/InterfaceEnumerator.cpp
     src/platform/PlatformUtils.cpp
+    src/storage/AccessGrantRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/ManualPeerRepository.cpp
     src/storage/SettingsRepository.cpp
     src/storage/ShareRepository.cpp
@@ -257,18 +268,34 @@ fengsui_add_qttest(tst_settings_page
 
 fengsui_add_qttest(tst_share_page
     src/tests/tst_share_page.cpp
+    src/app/AppSettings.cpp
+    src/core/BeaconService.cpp
     src/core/ShareService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
+    src/network/UdpDiscovery.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/platform/PlatformUtils.cpp
     src/storage/Database.cpp
+    src/storage/AccessGrantRepository.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/SettingsRepository.cpp
     src/storage/ShareRepository.cpp
     src/ui/UiStyle.cpp
+    src/ui/share/ShareAccessDialog.cpp
     src/ui/share/SharePage.cpp
 )
 
 fengsui_add_qttest(tst_share_service
     src/tests/tst_share_service.cpp
+    src/app/AppSettings.cpp
     src/core/ShareService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
+    src/storage/AccessGrantRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
+    src/storage/SettingsRepository.cpp
     src/storage/ShareRepository.cpp
 )
 
@@ -278,9 +305,13 @@ fengsui_add_qttest(tst_diagnostics_page
     src/core/BeaconService.cpp
     src/core/ShareService.cpp
     src/network/UdpDiscovery.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
     src/platform/InterfaceEnumerator.cpp
     src/platform/PlatformUtils.cpp
+    src/storage/AccessGrantRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/SettingsRepository.cpp
     src/storage/ShareRepository.cpp
     src/ui/UiStyle.cpp
@@ -309,8 +340,10 @@ fengsui_add_qttest(tst_main_window_navigation
     src/network/UdpDiscovery.cpp
     src/platform/InterfaceEnumerator.cpp
     src/platform/PlatformUtils.cpp
+    src/storage/AccessGrantRepository.cpp
     src/storage/ConversationRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/ManualPeerRepository.cpp
     src/storage/MessageRepository.cpp
     src/storage/SettingsRepository.cpp
@@ -333,10 +366,14 @@ fengsui_add_qttest(tst_beacon_policy
     src/app/AppSettings.cpp
     src/core/BeaconService.cpp
     src/core/ShareService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
     src/network/UdpDiscovery.cpp
     src/platform/InterfaceEnumerator.cpp
     src/platform/PlatformUtils.cpp
+    src/storage/AccessGrantRepository.cpp
     src/storage/Database.cpp
+    src/storage/DownloadLogRepository.cpp
     src/storage/SettingsRepository.cpp
     src/storage/ShareRepository.cpp
 )

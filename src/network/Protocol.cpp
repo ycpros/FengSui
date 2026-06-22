@@ -159,6 +159,19 @@ bool Protocol::isTransferMessage(const QJsonObject& message)
         || type == QStringLiteral("transfer.error");
 }
 
+bool Protocol::isShareMessage(const QJsonObject& message)
+{
+    const QString type = messageType(message);
+    return type == QStringLiteral("share.list")
+        || type == QStringLiteral("share.list.reply")
+        || type == QStringLiteral("share.items")
+        || type == QStringLiteral("share.items.reply")
+        || type == QStringLiteral("share.download")
+        || type == QStringLiteral("share.download.reply")
+        || type == QStringLiteral("share.download.complete")
+        || type == QStringLiteral("share.error");
+}
+
 // ---- 消息构建器 ----
 
 QJsonObject Protocol::buildTextMessage(const QString& messageId,
@@ -262,6 +275,136 @@ QJsonObject Protocol::buildTransferError(const QString& transferId,
     QJsonObject message;
     message.insert(QStringLiteral("type"), QStringLiteral("transfer.error"));
     message.insert(QStringLiteral("transfer_id"), transferId);
+    message.insert(QStringLiteral("error_code"), errorCode);
+    message.insert(QStringLiteral("error_message"), errorMessage);
+    return message;
+}
+
+// ---- 共享目录协议构建器 ----
+
+QJsonObject Protocol::buildShareListRequest(const QString& requestId,
+                                            const QString& from,
+                                            const QString& to)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.list"));
+    message.insert(QStringLiteral("request_id"), requestId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    return message;
+}
+
+QJsonObject Protocol::buildShareListReply(const QString& requestId,
+                                          const QString& from,
+                                          const QString& to,
+                                          const QJsonArray& shares)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.list.reply"));
+    message.insert(QStringLiteral("request_id"), requestId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    message.insert(QStringLiteral("shares"), shares);
+    return message;
+}
+
+QJsonObject Protocol::buildShareItemsRequest(const QString& requestId,
+                                             const QString& from,
+                                             const QString& to,
+                                             const QString& shareId,
+                                             const QString& path)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.items"));
+    message.insert(QStringLiteral("request_id"), requestId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    message.insert(QStringLiteral("share_id"), shareId);
+    message.insert(QStringLiteral("path"), path);
+    return message;
+}
+
+QJsonObject Protocol::buildShareItemsReply(const QString& requestId,
+                                           const QString& from,
+                                           const QString& to,
+                                           const QString& shareId,
+                                           const QString& path,
+                                           const QJsonArray& items)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.items.reply"));
+    message.insert(QStringLiteral("request_id"), requestId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    message.insert(QStringLiteral("share_id"), shareId);
+    message.insert(QStringLiteral("path"), path);
+    message.insert(QStringLiteral("items"), items);
+    return message;
+}
+
+QJsonObject Protocol::buildShareDownloadRequest(const QString& downloadId,
+                                                const QString& from,
+                                                const QString& to,
+                                                const QString& shareId,
+                                                const QString& path)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.download"));
+    message.insert(QStringLiteral("download_id"), downloadId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    message.insert(QStringLiteral("share_id"), shareId);
+    message.insert(QStringLiteral("path"), path);
+    return message;
+}
+
+QJsonObject Protocol::buildShareDownloadReply(const QString& downloadId,
+                                              const QString& from,
+                                              const QString& to,
+                                              const QString& shareId,
+                                              const QString& path,
+                                              const QString& fileName,
+                                              qint64 fileSize,
+                                              const QString& sha256)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.download.reply"));
+    message.insert(QStringLiteral("download_id"), downloadId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    message.insert(QStringLiteral("share_id"), shareId);
+    message.insert(QStringLiteral("path"), path);
+    message.insert(QStringLiteral("file_name"), fileName);
+    message.insert(QStringLiteral("file_size"), fileSize);
+    message.insert(QStringLiteral("sha256"), sha256);
+    return message;
+}
+
+QJsonObject Protocol::buildShareDownloadComplete(const QString& downloadId,
+                                                 const QString& from,
+                                                 const QString& to,
+                                                 const QString& sha256)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.download.complete"));
+    message.insert(QStringLiteral("download_id"), downloadId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
+    message.insert(QStringLiteral("sha256"), sha256);
+    return message;
+}
+
+QJsonObject Protocol::buildShareError(const QString& requestId,
+                                      const QString& from,
+                                      const QString& to,
+                                      const QString& errorCode,
+                                      const QString& errorMessage)
+{
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("share.error"));
+    message.insert(QStringLiteral("request_id"), requestId);
+    message.insert(QStringLiteral("from"), from);
+    message.insert(QStringLiteral("to"), to);
     message.insert(QStringLiteral("error_code"), errorCode);
     message.insert(QStringLiteral("error_message"), errorMessage);
     return message;

@@ -9,7 +9,9 @@
 #include "core/ShareService.h"
 #include "core/SignalService.h"
 #include "storage/ConversationRepository.h"
+#include "storage/AccessGrantRepository.h"
 #include "storage/Database.h"
+#include "storage/DownloadLogRepository.h"
 #include "storage/ManualPeerRepository.h"
 #include "storage/MessageRepository.h"
 #include "storage/SettingsRepository.h"
@@ -19,6 +21,7 @@
 #include "platform/InterfaceEnumerator.h"
 
 #include <QMetaType>
+#include <QJsonObject>
 #include <QSet>
 #include <QStringList>
 
@@ -120,6 +123,12 @@ Application::~Application()
     delete m_shareRepo;
     m_shareRepo = nullptr;
 
+    delete m_downloadLogRepo;
+    m_downloadLogRepo = nullptr;
+
+    delete m_accessGrantRepo;
+    m_accessGrantRepo = nullptr;
+
     delete m_manualPeerRepo;
     m_manualPeerRepo = nullptr;
 
@@ -165,8 +174,13 @@ bool Application::initialize()
 
     // 6. 创建共享目录仓库与服务，供发现广播和共享页面使用。
     m_shareRepo = new ShareRepository(m_database, this);
+    m_accessGrantRepo = new AccessGrantRepository(m_database, this);
+    m_downloadLogRepo = new DownloadLogRepository(m_database, this);
     m_shareService = new ShareService(this);
     m_shareService->setShareRepository(m_shareRepo);
+    m_shareService->setAppSettings(m_settings);
+    m_shareService->setAccessGrantRepository(m_accessGrantRepo);
+    m_shareService->setDownloadLogRepository(m_downloadLogRepo);
 
     // 7. 创建局域网发现服务。是否启动由 main() 在首次向导完成后决定。
     m_beaconService = new BeaconService(m_settings, m_networkPolicy, this);
@@ -174,6 +188,16 @@ bool Application::initialize()
 
     // 8. 创建 TCP 消息服务。是否启动由 main() 在首次向导完成后决定。
     m_signalService = new SignalService(m_settings, m_networkPolicy, this);
+    m_signalService->setShareService(m_shareService);
+    m_shareService->setSignalService(m_signalService);
+    connect(m_shareService,
+            &ShareService::outboundShareMessage,
+            m_signalService,
+            [this](const PeerInfo& peer, const QJsonObject& message) {
+                if (m_signalService) {
+                    m_signalService->sendJsonMessage(peer, message);
+                }
+            });
 
     // 9. 创建消息存储仓库，注入到 SignalService 以实现消息持久化
     m_conversationRepo = new ConversationRepository(m_database,
@@ -199,6 +223,8 @@ bool Application::initialize()
     qRegisterMetaType<FengSui::Message>("FengSui::Message");
     qRegisterMetaType<FengSui::Conversation>("FengSui::Conversation");
     qRegisterMetaType<FengSui::TransferTask>("FengSui::TransferTask");
+    qRegisterMetaType<FengSui::RemoteSharedFolder>("FengSui::RemoteSharedFolder");
+    qRegisterMetaType<FengSui::RemoteShareItem>("FengSui::RemoteShareItem");
 
     qInfo() << "Application initialized successfully";
     return true;

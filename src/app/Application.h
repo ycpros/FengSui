@@ -10,9 +10,11 @@ namespace FengSui {
 
 // 前向声明，避免在头文件中引入具体实现
 class AppSettings;
+class AccessGrantRepository;
 class BeaconService;
 class ConversationRepository;
 class CourierService;
+class DownloadLogRepository;
 class NetworkPolicy;
 class Database;
 class ManualPeerRepository;
@@ -117,6 +119,8 @@ private:
     MessageRepository*      m_messageRepo = nullptr;
     ManualPeerRepository*   m_manualPeerRepo = nullptr;
     ShareRepository*        m_shareRepo = nullptr;
+    AccessGrantRepository*  m_accessGrantRepo = nullptr;
+    DownloadLogRepository*  m_downloadLogRepo = nullptr;
     ShareService*           m_shareService = nullptr;
     TransferRepository*     m_transferRepo = nullptr;
     NetworkPolicy*          m_networkPolicy = nullptr;

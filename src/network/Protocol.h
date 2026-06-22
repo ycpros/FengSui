@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
 
@@ -76,6 +77,10 @@ public:
     // 用于在 TcpConnection 层快速判断是否转发给 CourierService。
     static bool isTransferMessage(const QJsonObject& message);
 
+    // 判断消息是否属于 share.* 族消息。
+    // 用于 SignalService 将共享浏览、下载、授权结果转发给 ShareService。
+    static bool isShareMessage(const QJsonObject& message);
+
     // ---- 消息构建器 ----
 
     // 构建 message.text JSON 对象。
@@ -145,6 +150,64 @@ public:
     static QJsonObject buildTransferError(const QString& transferId,
                                           const QString& errorCode,
                                           const QString& errorMessage);
+
+    // ---- 共享目录协议构建器 ----
+
+    // 构建 share.list 请求。
+    static QJsonObject buildShareListRequest(const QString& requestId,
+                                             const QString& from,
+                                             const QString& to);
+
+    // 构建 share.list.reply 响应。
+    static QJsonObject buildShareListReply(const QString& requestId,
+                                           const QString& from,
+                                           const QString& to,
+                                           const QJsonArray& shares);
+
+    // 构建 share.items 请求。
+    static QJsonObject buildShareItemsRequest(const QString& requestId,
+                                              const QString& from,
+                                              const QString& to,
+                                              const QString& shareId,
+                                              const QString& path);
+
+    // 构建 share.items.reply 响应。
+    static QJsonObject buildShareItemsReply(const QString& requestId,
+                                            const QString& from,
+                                            const QString& to,
+                                            const QString& shareId,
+                                            const QString& path,
+                                            const QJsonArray& items);
+
+    // 构建 share.download 请求。
+    static QJsonObject buildShareDownloadRequest(const QString& downloadId,
+                                                 const QString& from,
+                                                 const QString& to,
+                                                 const QString& shareId,
+                                                 const QString& path);
+
+    // 构建 share.download.reply 响应。
+    static QJsonObject buildShareDownloadReply(const QString& downloadId,
+                                               const QString& from,
+                                               const QString& to,
+                                               const QString& shareId,
+                                               const QString& path,
+                                               const QString& fileName,
+                                               qint64 fileSize,
+                                               const QString& sha256);
+
+    // 构建 share.download.complete 消息。
+    static QJsonObject buildShareDownloadComplete(const QString& downloadId,
+                                                  const QString& from,
+                                                  const QString& to,
+                                                  const QString& sha256);
+
+    // 构建 share.error 消息。
+    static QJsonObject buildShareError(const QString& requestId,
+                                       const QString& from,
+                                       const QString& to,
+                                       const QString& errorCode,
+                                       const QString& errorMessage);
 
     // ---- 二进制 Chunk 帧序列化 ----
 

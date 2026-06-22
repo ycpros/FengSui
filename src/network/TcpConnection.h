@@ -107,3 +107,5 @@ private:
 };
 
 } // namespace FengSui
+
+Q_DECLARE_METATYPE(FengSui::TcpConnection*)

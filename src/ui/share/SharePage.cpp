@@ -1,10 +1,12 @@
 // SharePage.cpp
-// Shared files shell: online browsing and local share management placeholders.
+// 共享文件页面实现：远程共享浏览、文件下载、本机共享管理和访问授权弹窗。
 
 #include "ui/share/SharePage.h"
 
+#include "core/BeaconService.h"
 #include "core/ShareService.h"
 #include "ui/UiStyle.h"
+#include "ui/share/ShareAccessDialog.h"
 
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -34,6 +36,23 @@ QTableWidgetItem* readOnlyItem(const QString& text)
     return item;
 }
 
+QString parentRemotePath(const QString& path)
+{
+    QString normalized = path.trimmed();
+    normalized.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    if (normalized.isEmpty() || normalized == QStringLiteral("/")) {
+        return QStringLiteral("/");
+    }
+    if (!normalized.startsWith(QLatin1Char('/'))) {
+        normalized.prepend(QLatin1Char('/'));
+    }
+    const int slash = normalized.lastIndexOf(QLatin1Char('/'));
+    if (slash <= 0) {
+        return QStringLiteral("/");
+    }
+    return normalized.left(slash);
+}
+
 } // namespace
 
 SharePage::SharePage(QWidget* parent)
@@ -50,7 +69,7 @@ SharePage::SharePage(QWidget* parent)
     titleLabel->setStyleSheet(UiStyle::pageTitleStyle());
 
     auto* subtitleLabel = new QLabel(
-        QStringLiteral("浏览同网段设备的共享目录，或管理本机将来对外提供的共享。"),
+        QStringLiteral("浏览同网段设备的共享目录，或管理本机对外提供的共享。"),
         this);
     subtitleLabel->setObjectName(QStringLiteral("pageSubtitle"));
     subtitleLabel->setStyleSheet(UiStyle::mutedTextStyle());
@@ -63,11 +82,10 @@ SharePage::SharePage(QWidget* parent)
     browseLayout->setContentsMargins(16, 16, 16, 16);
     browseLayout->setSpacing(12);
 
-    auto* browseHint = new QLabel(QStringLiteral("共享服务尚未接入，当前显示浏览器壳层。"),
-                                  browseTab);
-    browseHint->setObjectName(QStringLiteral("shareBrowseHintLabel"));
-    browseHint->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#eef4ff"),
-                                                 QStringLiteral("#175cd3")));
+    m_browseHint = new QLabel(QStringLiteral("请选择在线共享源。"), browseTab);
+    m_browseHint->setObjectName(QStringLiteral("shareBrowseHintLabel"));
+    m_browseHint->setStyleSheet(UiStyle::pillStyle(QStringLiteral("#eef4ff"),
+                                                   QStringLiteral("#175cd3")));
 
     auto* splitter = new QSplitter(Qt::Horizontal, browseTab);
     splitter->setHandleWidth(1);
@@ -78,49 +96,49 @@ SharePage::SharePage(QWidget* parent)
     sourceLayout->setSpacing(8);
     auto* sourceTitle = new QLabel(QStringLiteral("在线共享源"), sourcePanel);
     sourceTitle->setStyleSheet(UiStyle::sectionTitleStyle());
-    auto* sourceList = new QListWidget(sourcePanel);
-    sourceList->setObjectName(QStringLiteral("shareSourceList"));
-    sourceList->addItem(QStringLiteral("暂无在线共享源"));
-    sourceList->item(0)->setFlags(Qt::ItemIsEnabled);
+    m_sourceList = new QListWidget(sourcePanel);
+    m_sourceList->setObjectName(QStringLiteral("shareSourceList"));
+    auto* shareTitle = new QLabel(QStringLiteral("共享目录"), sourcePanel);
+    shareTitle->setStyleSheet(UiStyle::sectionTitleStyle());
+    m_remoteShareList = new QListWidget(sourcePanel);
+    m_remoteShareList->setObjectName(QStringLiteral("remoteShareList"));
     sourceLayout->addWidget(sourceTitle);
-    sourceLayout->addWidget(sourceList, 1);
+    sourceLayout->addWidget(m_sourceList, 1);
+    sourceLayout->addWidget(shareTitle);
+    sourceLayout->addWidget(m_remoteShareList, 1);
 
     auto* browserPanel = new QWidget(splitter);
     auto* browserLayout = new QVBoxLayout(browserPanel);
     browserLayout->setContentsMargins(12, 0, 0, 0);
     browserLayout->setSpacing(8);
-    auto* breadcrumb = new QLabel(QStringLiteral("位置：/"), browserPanel);
-    breadcrumb->setObjectName(QStringLiteral("shareBreadcrumbLabel"));
-    breadcrumb->setStyleSheet(UiStyle::mutedTextStyle());
-    auto* fileTable = new QTableWidget(browserPanel);
-    fileTable->setObjectName(QStringLiteral("shareFileTable"));
-    fileTable->setColumnCount(4);
-    fileTable->setHorizontalHeaderLabels({
+    m_breadcrumbLabel = new QLabel(QStringLiteral("位置：/"), browserPanel);
+    m_breadcrumbLabel->setObjectName(QStringLiteral("shareBreadcrumbLabel"));
+    m_breadcrumbLabel->setStyleSheet(UiStyle::mutedTextStyle());
+    m_fileTable = new QTableWidget(browserPanel);
+    m_fileTable->setObjectName(QStringLiteral("shareFileTable"));
+    m_fileTable->setColumnCount(4);
+    m_fileTable->setHorizontalHeaderLabels({
         QStringLiteral("名称"),
         QStringLiteral("类型"),
         QStringLiteral("大小"),
         QStringLiteral("修改时间"),
     });
-    fileTable->verticalHeader()->setVisible(false);
-    fileTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    fileTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    fileTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    fileTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    fileTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    fileTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    fileTable->setRowCount(1);
-    fileTable->setItem(0, 0, readOnlyItem(QStringLiteral("选择共享源后显示目录内容")));
-    fileTable->setItem(0, 1, readOnlyItem(QStringLiteral("-")));
-    fileTable->setItem(0, 2, readOnlyItem(QStringLiteral("-")));
-    fileTable->setItem(0, 3, readOnlyItem(QStringLiteral("-")));
-    browserLayout->addWidget(breadcrumb);
-    browserLayout->addWidget(fileTable, 1);
+    m_fileTable->verticalHeader()->setVisible(false);
+    m_fileTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_fileTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_fileTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_fileTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_fileTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_fileTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_fileTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    browserLayout->addWidget(m_breadcrumbLabel);
+    browserLayout->addWidget(m_fileTable, 1);
 
     splitter->addWidget(sourcePanel);
     splitter->addWidget(browserPanel);
-    splitter->setSizes({260, 620});
+    splitter->setSizes({300, 620});
 
-    browseLayout->addWidget(browseHint);
+    browseLayout->addWidget(m_browseHint);
     browseLayout->addWidget(splitter, 1);
 
     auto* myTab = new QWidget(tabWidget);
@@ -151,26 +169,12 @@ SharePage::SharePage(QWidget* parent)
     m_myShareList->setSelectionMode(QAbstractItemView::NoSelection);
     renderMyShares();
 
-    auto* controlsPreview = new QWidget(myTab);
-    auto* controlsLayout = new QHBoxLayout(controlsPreview);
-    controlsLayout->setContentsMargins(0, 0, 0, 0);
-    auto* togglePreview = new QCheckBox(QStringLiteral("启用共享"), controlsPreview);
-    togglePreview->setObjectName(QStringLiteral("shareEnablePreviewCheck"));
-    togglePreview->setEnabled(false);
-    auto* removePreview = new QPushButton(QStringLiteral("删除"), controlsPreview);
-    removePreview->setObjectName(QStringLiteral("shareRemovePreviewButton"));
-    removePreview->setEnabled(false);
-    controlsLayout->addWidget(togglePreview);
-    controlsLayout->addWidget(removePreview);
-    controlsLayout->addStretch();
-
     tabWidget->addTab(browseTab, QStringLiteral("浏览共享"));
     tabWidget->addTab(myTab, QStringLiteral("我的共享"));
 
     myLayout->addLayout(toolbar);
     myLayout->addWidget(m_serviceHint);
     myLayout->addWidget(m_myShareList, 1);
-    myLayout->addWidget(controlsPreview);
 
     layout->addWidget(titleLabel);
     layout->addWidget(subtitleLabel);
@@ -193,6 +197,24 @@ SharePage::SharePage(QWidget* parent)
             showServiceMessage(QStringLiteral("无法添加共享目录，请确认路径有效。"));
         }
     });
+
+    connect(m_sourceList, &QListWidget::itemActivated,
+            this, [this](QListWidgetItem*) { requestSelectedSourceShares(); });
+    connect(m_sourceList, &QListWidget::currentItemChanged,
+            this, [this](QListWidgetItem*, QListWidgetItem*) {
+                requestSelectedSourceShares();
+            });
+    connect(m_remoteShareList, &QListWidget::itemActivated,
+            this, [this](QListWidgetItem*) { requestSelectedShareItems(); });
+    connect(m_remoteShareList, &QListWidget::currentItemChanged,
+            this, [this](QListWidgetItem*, QListWidgetItem*) {
+                requestSelectedShareItems();
+            });
+    connect(m_fileTable, &QTableWidget::cellDoubleClicked,
+            this, [this](int row, int) { openSelectedRemoteItem(row); });
+
+    renderShareSources();
+    renderRemoteItems(QString(), QString(), QStringLiteral("/"), {});
 }
 
 void SharePage::setShareService(ShareService* service)
@@ -210,8 +232,76 @@ void SharePage::setShareService(ShareService* service)
                 &ShareService::sharedFoldersChanged,
                 this,
                 &SharePage::renderMyShares);
+        connect(m_shareService,
+                &ShareService::remoteShareListReceived,
+                this,
+                [this](const QString& peerId,
+                       const QString&,
+                       const QList<RemoteSharedFolder>& shares) {
+                    renderRemoteShares(peerId, shares);
+                });
+        connect(m_shareService,
+                &ShareService::remoteShareItemsReceived,
+                this,
+                [this](const QString& peerId,
+                       const QString&,
+                       const QString& shareId,
+                       const QString& path,
+                       const QList<RemoteShareItem>& items) {
+                    renderRemoteItems(peerId, shareId, path, items);
+                });
+        connect(m_shareService,
+                &ShareService::remoteShareDownloadStarted,
+                this,
+                [this](const QString&, const QString& fileName, qint64, const QString&) {
+                    showBrowseMessage(QStringLiteral("开始下载：%1").arg(fileName));
+                });
+        connect(m_shareService,
+                &ShareService::remoteShareDownloadCompleted,
+                this,
+                [this](const QString&, const QString& localPath) {
+                    showBrowseMessage(QStringLiteral("下载完成：%1").arg(localPath));
+                });
+        connect(m_shareService,
+                &ShareService::remoteShareFailed,
+                this,
+                [this](const QString&, const QString& errorMessage) {
+                    showBrowseMessage(errorMessage);
+                });
+        connect(m_shareService,
+                &ShareService::accessRequested,
+                this,
+                [this](const QString& requestId,
+                       const QString& requesterName,
+                       const QString& deviceName,
+                       const QString& shareName) {
+                    ShareAccessDialog dialog(requesterName, deviceName, shareName, this);
+                    const bool allowed = dialog.exec() == QDialog::Accepted;
+                    m_shareService->resolveAccessRequest(requestId,
+                                                         allowed,
+                                                         dialog.rememberChoice());
+                });
     }
     renderMyShares();
+}
+
+void SharePage::setBeaconService(BeaconService* service)
+{
+    if (m_beaconService == service) {
+        return;
+    }
+    if (m_beaconService) {
+        disconnect(m_beaconService, nullptr, this, nullptr);
+    }
+
+    m_beaconService = service;
+    if (m_beaconService) {
+        connect(m_beaconService, &BeaconService::peerOnline,
+                this, [this](PeerInfo) { renderShareSources(); });
+        connect(m_beaconService, &BeaconService::peerOffline,
+                this, [this](QString) { renderShareSources(); });
+    }
+    renderShareSources();
 }
 
 void SharePage::renderMyShares()
@@ -239,6 +329,128 @@ void SharePage::renderMyShares()
         item->setSizeHint(QSize(0, 72));
         m_myShareList->addItem(item);
         m_myShareList->setItemWidget(item, createShareRow(folder));
+    }
+}
+
+void SharePage::renderShareSources()
+{
+    if (!m_sourceList) {
+        return;
+    }
+
+    const QString previousPeerId = m_currentPeerId;
+    m_sharePeers.clear();
+    m_sourceList->clear();
+
+    const QList<PeerInfo> peers = m_beaconService ? m_beaconService->peers() : QList<PeerInfo>();
+    for (const PeerInfo& peer : peers) {
+        if (!peer.online || !peer.shareEnabled) {
+            continue;
+        }
+        m_sharePeers.insert(peer.peerId, peer);
+        auto* item = new QListWidgetItem(
+            QStringLiteral("%1  %2").arg(peer.displayName, peer.ip));
+        item->setData(Qt::UserRole, peer.peerId);
+        item->setSizeHint(QSize(0, 44));
+        m_sourceList->addItem(item);
+        if (peer.peerId == previousPeerId) {
+            m_sourceList->setCurrentItem(item);
+        }
+    }
+
+    if (m_sourceList->count() == 0) {
+        auto* emptyItem = new QListWidgetItem(QStringLiteral("暂无在线共享源"));
+        emptyItem->setFlags(Qt::ItemIsEnabled);
+        m_sourceList->addItem(emptyItem);
+        m_currentPeerId.clear();
+        m_remoteShareList->clear();
+        renderRemoteItems(QString(), QString(), QStringLiteral("/"), {});
+    }
+}
+
+void SharePage::renderRemoteShares(const QString& peerId,
+                                   const QList<RemoteSharedFolder>& shares)
+{
+    if (!m_remoteShareList || peerId != m_currentPeerId) {
+        return;
+    }
+
+    m_remoteSharesByPeer.insert(peerId, shares);
+    m_currentRemoteShares = shares;
+    m_remoteShareList->clear();
+
+    if (shares.isEmpty()) {
+        auto* emptyItem = new QListWidgetItem(QStringLiteral("该设备暂无可访问共享"));
+        emptyItem->setFlags(Qt::ItemIsEnabled);
+        m_remoteShareList->addItem(emptyItem);
+        renderRemoteItems(peerId, QString(), QStringLiteral("/"), {});
+        return;
+    }
+
+    for (const RemoteSharedFolder& folder : shares) {
+        auto* item = new QListWidgetItem(
+            QStringLiteral("%1（%2 个文件）")
+                .arg(folder.displayName)
+                .arg(folder.fileCount));
+        item->setData(Qt::UserRole, folder.shareId);
+        item->setSizeHint(QSize(0, 44));
+        m_remoteShareList->addItem(item);
+    }
+    m_remoteShareList->setCurrentRow(0);
+}
+
+void SharePage::renderRemoteItems(const QString& peerId,
+                                  const QString& shareId,
+                                  const QString& path,
+                                  const QList<RemoteShareItem>& items)
+{
+    if (!m_fileTable || (!peerId.isEmpty() && peerId != m_currentPeerId)) {
+        return;
+    }
+
+    m_currentShareId = shareId;
+    m_currentPath = path.trimmed().isEmpty() ? QStringLiteral("/") : path;
+    m_currentRemoteItems = items;
+    if (m_breadcrumbLabel) {
+        m_breadcrumbLabel->setText(QStringLiteral("位置：%1").arg(m_currentPath));
+    }
+
+    m_fileTable->setRowCount(0);
+    int row = 0;
+    if (!shareId.isEmpty() && m_currentPath != QStringLiteral("/")) {
+        m_fileTable->insertRow(row);
+        auto* name = readOnlyItem(QStringLiteral(".."));
+        name->setData(Qt::UserRole, parentRemotePath(m_currentPath));
+        name->setData(Qt::UserRole + 1, true);
+        m_fileTable->setItem(row, 0, name);
+        m_fileTable->setItem(row, 1, readOnlyItem(QStringLiteral("目录")));
+        m_fileTable->setItem(row, 2, readOnlyItem(QStringLiteral("-")));
+        m_fileTable->setItem(row, 3, readOnlyItem(QStringLiteral("-")));
+        ++row;
+    }
+
+    for (const RemoteShareItem& item : items) {
+        m_fileTable->insertRow(row);
+        auto* name = readOnlyItem(item.name);
+        name->setData(Qt::UserRole, item.path);
+        name->setData(Qt::UserRole + 1, item.isDir);
+        m_fileTable->setItem(row, 0, name);
+        m_fileTable->setItem(row, 1, readOnlyItem(item.isDir
+                                                  ? QStringLiteral("目录")
+                                                  : QStringLiteral("文件")));
+        m_fileTable->setItem(row, 2, readOnlyItem(item.isDir
+                                                  ? QStringLiteral("-")
+                                                  : QString::number(item.size)));
+        m_fileTable->setItem(row, 3, readOnlyItem(item.modifiedAt));
+        ++row;
+    }
+
+    if (row == 0) {
+        m_fileTable->insertRow(0);
+        m_fileTable->setItem(0, 0, readOnlyItem(QStringLiteral("选择共享目录后显示内容")));
+        m_fileTable->setItem(0, 1, readOnlyItem(QStringLiteral("-")));
+        m_fileTable->setItem(0, 2, readOnlyItem(QStringLiteral("-")));
+        m_fileTable->setItem(0, 3, readOnlyItem(QStringLiteral("-")));
     }
 }
 
@@ -300,6 +512,83 @@ void SharePage::showServiceMessage(const QString& message)
     }
     m_serviceHint->setText(message);
     m_serviceHint->setVisible(true);
+}
+
+void SharePage::showBrowseMessage(const QString& message)
+{
+    if (!m_browseHint) {
+        return;
+    }
+    m_browseHint->setText(message);
+    m_browseHint->setVisible(true);
+}
+
+void SharePage::requestSelectedSourceShares()
+{
+    if (!m_shareService || !m_sourceList || !m_sourceList->currentItem()) {
+        return;
+    }
+
+    const QString peerId = m_sourceList->currentItem()->data(Qt::UserRole).toString();
+    if (!m_sharePeers.contains(peerId)) {
+        return;
+    }
+    m_currentPeerId = peerId;
+    m_remoteShareList->clear();
+    renderRemoteItems(peerId, QString(), QStringLiteral("/"), {});
+    showBrowseMessage(QStringLiteral("正在读取共享目录..."));
+    m_shareService->requestShareList(m_sharePeers.value(peerId));
+}
+
+void SharePage::requestSelectedShareItems()
+{
+    if (!m_shareService || !m_remoteShareList || !m_remoteShareList->currentItem()) {
+        return;
+    }
+    const QString shareId = m_remoteShareList->currentItem()->data(Qt::UserRole).toString();
+    if (shareId.trimmed().isEmpty() || !m_sharePeers.contains(m_currentPeerId)) {
+        return;
+    }
+
+    m_currentShareId = shareId;
+    m_currentPath = QStringLiteral("/");
+    showBrowseMessage(QStringLiteral("正在读取目录..."));
+    m_shareService->requestShareItems(m_sharePeers.value(m_currentPeerId),
+                                      shareId,
+                                      m_currentPath);
+}
+
+void SharePage::openSelectedRemoteItem(int row)
+{
+    if (!m_shareService || !m_fileTable || row < 0 || row >= m_fileTable->rowCount()
+        || !m_fileTable->item(row, 0) || !m_sharePeers.contains(m_currentPeerId)
+        || m_currentShareId.trimmed().isEmpty()) {
+        return;
+    }
+
+    const QString path = m_fileTable->item(row, 0)->data(Qt::UserRole).toString();
+    const bool isDir = m_fileTable->item(row, 0)->data(Qt::UserRole + 1).toBool();
+    if (path.trimmed().isEmpty()) {
+        return;
+    }
+
+    if (isDir) {
+        showBrowseMessage(QStringLiteral("正在读取目录..."));
+        m_shareService->requestShareItems(m_sharePeers.value(m_currentPeerId),
+                                          m_currentShareId,
+                                          path);
+        return;
+    }
+
+    showBrowseMessage(QStringLiteral("正在请求下载..."));
+    m_shareService->requestShareDownload(m_sharePeers.value(m_currentPeerId),
+                                         m_currentShareId,
+                                         path);
+}
+
+PeerInfo SharePage::selectedPeer() const
+{
+    return m_sharePeers.value(m_currentPeerId);
 }
 
 } // namespace FengSui

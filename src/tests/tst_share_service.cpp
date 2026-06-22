@@ -3,9 +3,11 @@
 
 #include "core/ShareService.h"
 #include "models/SharedFolder.h"
+#include "storage/AccessGrantRepository.h"
 #include "storage/Database.h"
 #include "storage/ShareRepository.h"
 
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest/QtTest>
@@ -20,6 +22,8 @@ class ShareServiceTest : public QObject {
 private slots:
     void addListDuplicateToggleAndRemove();
     void invalidPathIsRejected();
+    void remoteShareRequestEmitsOutboundMessage();
+    void firstAccessCanBeRemembered();
 };
 
 void ShareServiceTest::addListDuplicateToggleAndRemove()
@@ -98,6 +102,70 @@ void ShareServiceTest::invalidPathIsRejected()
     QVERIFY(!missing.has_value());
     QVERIFY(service.sharedFolders().isEmpty());
     QVERIFY(!service.hasActiveShares());
+}
+
+void ShareServiceTest::remoteShareRequestEmitsOutboundMessage()
+{
+    FengSui::ShareService service;
+
+    FengSui::PeerInfo peer;
+    peer.peerId = QStringLiteral("peer_remote");
+    peer.ip = QStringLiteral("127.0.0.1");
+    peer.port = 8787;
+
+    bool emitted = false;
+    QJsonObject outbound;
+    QObject::connect(&service,
+                     &FengSui::ShareService::outboundShareMessage,
+                     &service,
+                     [&](const FengSui::PeerInfo& target,
+                         const QJsonObject& message) {
+                         emitted = true;
+                         QCOMPARE(target.peerId, peer.peerId);
+                         outbound = message;
+                     });
+
+    const QString requestId = service.requestShareList(peer);
+    QVERIFY(emitted);
+    QVERIFY(requestId.startsWith(QStringLiteral("sr_")));
+    QCOMPARE(outbound.value(QStringLiteral("type")).toString(),
+             QStringLiteral("share.list"));
+    QCOMPARE(outbound.value(QStringLiteral("request_id")).toString(), requestId);
+}
+
+void ShareServiceTest::firstAccessCanBeRemembered()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    FengSui::Database database(tempDir.filePath(QStringLiteral("access.db")));
+    QVERIFY(database.initialize());
+
+    FengSui::ShareRepository repository(&database);
+    FengSui::AccessGrantRepository grants(&database);
+    FengSui::ShareService service;
+    service.setShareRepository(&repository);
+    service.setAccessGrantRepository(&grants);
+
+    const std::optional<FengSui::SharedFolder> folder =
+        service.addSharedFolder(tempDir.path(), QStringLiteral("Docs"));
+    QVERIFY(folder.has_value());
+
+    QSignalSpy accessSpy(&service, &FengSui::ShareService::accessRequested);
+    QJsonObject request;
+    request.insert(QStringLiteral("type"), QStringLiteral("share.list"));
+    request.insert(QStringLiteral("request_id"), QStringLiteral("sr_auth"));
+    request.insert(QStringLiteral("from"), QStringLiteral("peer_remote"));
+    request.insert(QStringLiteral("display_name"), QStringLiteral("Alice"));
+    request.insert(QStringLiteral("device_name"), QStringLiteral("Laptop"));
+
+    service.handleShareMessage(nullptr, request);
+    QCOMPARE(accessSpy.size(), 1);
+    QCOMPARE(accessSpy.first().at(0).toString(), QStringLiteral("sr_auth"));
+    QCOMPARE(accessSpy.first().at(3).toString(), QStringLiteral("共享目录列表"));
+
+    service.resolveAccessRequest(QStringLiteral("sr_auth"), true, true);
+    QVERIFY(grants.hasGrant(QStringLiteral("peer_remote"), folder->shareId));
 }
 
 } // namespace

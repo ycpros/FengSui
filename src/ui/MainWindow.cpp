@@ -195,6 +195,7 @@ void MainWindow::createPageStack()
         m_chatPage->setLocalPeerId(m_app->settings()->peerId());
         m_transferPage->setCourierService(m_app->courierService());
         m_sharePage->setShareService(m_app->shareService());
+        m_sharePage->setBeaconService(m_app->beaconService());
     }
 
     // 双击联系人 → 打开聊天会话并切换到聊天页

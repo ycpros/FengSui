@@ -1,12 +1,18 @@
 // tst_storage.cpp
 // SQLite 仓储测试：建表、peer 同步、会话创建、消息保存和状态更新。
 
+#include "models/AccessGrant.h"
+#include "models/DownloadLog.h"
 #include "models/Message.h"
 #include "models/PeerInfo.h"
+#include "models/SharedFolder.h"
+#include "storage/AccessGrantRepository.h"
 #include "storage/ConversationRepository.h"
 #include "storage/Database.h"
+#include "storage/DownloadLogRepository.h"
 #include "storage/ManualPeerRepository.h"
 #include "storage/MessageRepository.h"
+#include "storage/ShareRepository.h"
 
 #include <QDateTime>
 #include <QTemporaryDir>
@@ -19,6 +25,7 @@ class StorageTest : public QObject {
 
 private slots:
     void conversationAndMessageRoundTrip();
+    void accessGrantAndDownloadLogRoundTrip();
 };
 
 void StorageTest::conversationAndMessageRoundTrip()
@@ -100,6 +107,57 @@ void StorageTest::conversationAndMessageRoundTrip()
     QCOMPARE(storedManualPeer->host, manualPeer.host);
     QCOMPARE(storedManualPeer->port, manualPeer.port);
     QCOMPARE(manualPeers.getAllManualPeers().size(), 1);
+}
+
+void StorageTest::accessGrantAndDownloadLogRoundTrip()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    FengSui::Database database(tempDir.filePath(QStringLiteral("share_storage.db")));
+    QVERIFY(database.initialize());
+
+    FengSui::ShareRepository shares(&database);
+    FengSui::AccessGrantRepository grants(&database);
+    FengSui::DownloadLogRepository logs(&database);
+
+    FengSui::SharedFolder folder;
+    folder.shareId = QStringLiteral("sh_test");
+    folder.localPath = tempDir.path();
+    folder.displayName = QStringLiteral("Docs");
+    folder.isActive = true;
+    QVERIFY(shares.saveSharedFolder(folder));
+
+    FengSui::AccessGrant grant;
+    grant.peerId = QStringLiteral("peer_remote");
+    grant.shareId = folder.shareId;
+    grant.grantedAt = QDateTime::currentDateTimeUtc();
+    grant.remember = true;
+    QVERIFY(grants.saveGrant(grant));
+    QVERIFY(grants.hasGrant(grant.peerId, grant.shareId));
+
+    const std::optional<FengSui::AccessGrant> storedGrant =
+        grants.grantFor(grant.peerId, grant.shareId);
+    QVERIFY(storedGrant.has_value());
+    QVERIFY(storedGrant->remember);
+
+    FengSui::DownloadLog log;
+    log.logId = QStringLiteral("dl_test");
+    log.peerId = grant.peerId;
+    log.shareId = folder.shareId;
+    log.remotePath = QStringLiteral("/a.txt");
+    log.localPath = tempDir.filePath(QStringLiteral("a.txt"));
+    log.fileName = QStringLiteral("a.txt");
+    log.fileSize = 12;
+    log.downloadedAt = QDateTime::currentDateTimeUtc();
+    log.success = true;
+    QVERIFY(logs.saveLog(log));
+
+    const QList<FengSui::DownloadLog> recent = logs.recentLogs();
+    QCOMPARE(recent.size(), 1);
+    QCOMPARE(recent.first().logId, log.logId);
+    QCOMPARE(recent.first().remotePath, log.remotePath);
+    QVERIFY(recent.first().success);
 }
 
 } // namespace

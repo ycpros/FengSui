@@ -5,6 +5,7 @@
 
 #include "app/AppSettings.h"
 #include "core/CourierService.h"
+#include "core/ShareService.h"
 #include "network/Protocol.h"
 #include "network/TcpConnection.h"
 #include "network/TcpServer.h"
@@ -17,6 +18,7 @@
 #include <QDebug>
 #include <QHostAddress>
 #include <QJsonObject>
+#include <QMetaObject>
 #include <QUuid>
 
 namespace FengSui {
@@ -300,6 +302,11 @@ void SignalService::setCourierService(CourierService* service)
     m_courierService = service;
 }
 
+void SignalService::setShareService(ShareService* service)
+{
+    m_shareService = service;
+}
+
 // ---- Private Slots ----
 
 void SignalService::onNewIncomingConnection(TcpConnection* connection)
@@ -316,11 +323,7 @@ void SignalService::onNewIncomingConnection(TcpConnection* connection)
     connect(connection, &TcpConnection::errorOccurred,
             this, &SignalService::onConnectionError);
 
-    // 将二进制 chunk 数据转发给 CourierService
-    if (m_courierService) {
-        connect(connection, &TcpConnection::binaryChunkReceived,
-                m_courierService, &CourierService::handleChunkData);
-    }
+    connectConnectionServices(connection);
 
     // 入站连接尚未识别对等体身份，加入待识别列表
     m_pendingConnections.append(connection);
@@ -400,6 +403,15 @@ void SignalService::onConnectionMessage(const QJsonObject& message)
     // 将 transfer.* 族消息转发给 CourierService 处理
     if (m_courierService && Protocol::isTransferMessage(message)) {
         m_courierService->handleTransferMessage(connection, message);
+    }
+
+    // 将 share.* 族消息转发给 ShareService 处理
+    if (m_shareService && Protocol::isShareMessage(message)) {
+        QMetaObject::invokeMethod(m_shareService,
+                                  "handleShareMessage",
+                                  Qt::DirectConnection,
+                                  Q_ARG(FengSui::TcpConnection*, connection),
+                                  Q_ARG(QJsonObject, message));
     }
 
     // 向上层投递消息
@@ -515,11 +527,7 @@ TcpConnection* SignalService::ensureConnection(const PeerInfo& peer)
     connect(conn, &TcpConnection::errorOccurred,
             this, &SignalService::onConnectionError);
 
-    // 将二进制 chunk 数据转发给 CourierService
-    if (m_courierService) {
-        connect(conn, &TcpConnection::binaryChunkReceived,
-                m_courierService, &CourierService::handleChunkData);
-    }
+    connectConnectionServices(conn);
 
     // 注册到连接映射（占位，实际 connected 时才算建立）
     registerConnection(peer.peerId, conn);
@@ -696,6 +704,37 @@ QList<BindEndpoint> SignalService::buildBindEndpoints() const
     }
 
     return m_networkPolicy->getBindEndpoints(m_settings->listenPort(), addresses);
+}
+
+void SignalService::connectConnectionServices(TcpConnection* connection)
+{
+    if (!connection) {
+        return;
+    }
+
+    connect(connection,
+            &TcpConnection::binaryChunkReceived,
+            this,
+            [this](const QString& transferId,
+                   quint32 chunkIndex,
+                   const QByteArray& data) {
+                if (transferId.startsWith(QStringLiteral("sd_"))) {
+                    if (m_shareService) {
+                        QMetaObject::invokeMethod(m_shareService,
+                                                  "handleDownloadChunk",
+                                                  Qt::DirectConnection,
+                                                  Q_ARG(QString, transferId),
+                                                  Q_ARG(quint32, chunkIndex),
+                                                  Q_ARG(QByteArray, data));
+                    }
+                    return;
+                }
+                if (m_courierService) {
+                    m_courierService->handleChunkData(transferId,
+                                                      chunkIndex,
+                                                      data);
+                }
+            });
 }
 
 // ---- 存储层注入与查询代理 ----
