@@ -17,6 +17,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 #include <optional>
@@ -140,13 +141,16 @@ void ChatPage::refreshConversationList()
         m_conversationCache.insert(conv.conversationId, conv);
     }
 
-    // 保存当前选中的会话 ID
+    // 保存当前选中的会话 ID；没有当前项时优先恢复活跃会话。
     QString selectedConvId;
     if (m_conversationList->currentItem()) {
         selectedConvId = m_conversationList->currentItem()->data(Qt::UserRole).toString();
+    } else {
+        selectedConvId = m_activeConversationId;
     }
 
     // 重建会话列表
+    QSignalBlocker blocker(m_conversationList);
     m_conversationList->clear();
     for (const auto& conv : conversations) {
         auto* item = new QListWidgetItem();
@@ -208,6 +212,9 @@ void ChatPage::onConversationSelected(QListWidgetItem* current, QListWidgetItem*
 
     const QString convId = current->data(Qt::UserRole).toString();
     if (convId.isEmpty() || !m_signalService) {
+        return;
+    }
+    if (convId == m_activeConversationId) {
         return;
     }
 

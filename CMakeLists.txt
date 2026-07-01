@@ -239,6 +239,24 @@ fengsui_add_qttest(tst_transfer_center_page
     src/ui/transfer_center/TransferCenterPage.cpp
 )
 
+fengsui_add_qttest(tst_chat_page
+    src/tests/tst_chat_page.cpp
+    src/app/AppSettings.cpp
+    src/core/CourierService.cpp
+    src/core/SignalService.cpp
+    src/network/Protocol.cpp
+    src/network/TcpConnection.cpp
+    src/network/TcpServer.cpp
+    src/platform/InterfaceEnumerator.cpp
+    src/storage/ConversationRepository.cpp
+    src/storage/Database.cpp
+    src/storage/MessageRepository.cpp
+    src/storage/SettingsRepository.cpp
+    src/storage/TransferRepository.cpp
+    src/ui/UiStyle.cpp
+    src/ui/chat/ChatPage.cpp
+)
+
 fengsui_add_qttest(tst_add_peer_dialog
     src/tests/tst_add_peer_dialog.cpp
     src/core/TcpProbe.cpp
