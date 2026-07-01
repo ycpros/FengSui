@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(FengSui VERSION 0.1.0 LANGUAGES CXX)
+project(FengSui VERSION 0.5.0 LANGUAGES CXX)
 
 # C++17 标准，按 10_coding_rules.md 要求
 set(CMAKE_CXX_STANDARD 17)
@@ -182,6 +182,14 @@ set(HEADERS
     src/platform/PlatformUtils.h
 )
 
+# 根据 CMake PROJECT_VERSION 生成版本头文件。
+# 应用程序通过 #include "Version.h" 使用 FENGSUI_VERSION_* 宏，
+# 消除 Application.cpp 中硬编码版本字符串的重复。
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/app/Version.h.in"
+    "${CMAKE_BINARY_DIR}/generated/Version.h"
+)
+
 # 可执行文件（QML 应用需用 qt_add_executable 以正确处理资源与元数据）
 qt_add_executable(fengsui ${SOURCES} ${HEADERS} ${VIEWMODEL_SOURCES})
 
@@ -189,7 +197,7 @@ qt_add_executable(fengsui ${SOURCES} ${HEADERS} ${VIEWMODEL_SOURCES})
 # QML 中通过 import FengSui.Ui 访问，main.cpp 用 loadFromModule 加载 Main.qml。
 qt_add_qml_module(fengsui
     URI FengSui.Ui
-    VERSION 1.0
+    VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     QML_FILES ${QML_FILES}
     SOURCES ${VIEWMODEL_SOURCES}
     RESOURCES ${QML_RESOURCES}
@@ -213,6 +221,7 @@ file(REAL_PATH "${CMAKE_SOURCE_DIR}/src" FENGSUI_SRC_DIR)
 target_include_directories(fengsui PRIVATE
     "${FENGSUI_SRC_DIR}"
     "${FENGSUI_SRC_DIR}/ui/viewmodels"
+    "${CMAKE_BINARY_DIR}/generated"     # Version.h（configure_file 生成）
 )
 
 # Windows 下隐藏控制台窗口（桌面应用）
@@ -240,7 +249,10 @@ enable_testing()
 # 统一追加 MODEL_META_SOURCES，使各测试能解析 models 层 struct 的 staticMetaObject。
 function(fengsui_add_qttest target_name)
     add_executable(${target_name} ${ARGN} ${MODEL_META_SOURCES})
-    target_include_directories(${target_name} PRIVATE "${FENGSUI_SRC_DIR}")
+    target_include_directories(${target_name} PRIVATE
+        "${FENGSUI_SRC_DIR}"
+        "${CMAKE_BINARY_DIR}/generated"     # Version.h
+    )
     target_link_libraries(${target_name} PRIVATE
         Qt6::Test
         Qt6::Network

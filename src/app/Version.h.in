@@ -1,0 +1,25 @@
+// Version.h.in
+// CMake 通过 configure_file 从 PROJECT_VERSION 自动生成 Version.h。
+// 应用程序和测试代码应 include 生成后的 Version.h（位于 build 目录），
+// 使用 FENGSUI_VERSION_* 宏替代硬编码版本字符串。
+//
+// 模板中使用 @VAR@ 占位符，configure_file 会替换为 CMake 变量的实际值。
+
+#pragma once
+
+// 主版本号（不兼容的 API 变更）
+#define FENGSUI_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+
+// 次版本号（向后兼容的功能新增）
+#define FENGSUI_VERSION_MINOR @PROJECT_VERSION_MINOR@
+
+// 修订号（向后兼容的问题修复）
+#define FENGSUI_VERSION_PATCH @PROJECT_VERSION_PATCH@
+
+// 完整版本字符串，如 "0.5.0"
+#define FENGSUI_VERSION_STRING "@PROJECT_VERSION@"
+
+// 数据库 schema 版本（整数，独立于应用版本）。
+// 当 Database::createTables() 中的 DDL 发生变更时必须递增，
+// Database::initializeVersion() 据此决定是否需要执行迁移。
+#define FENGSUI_DB_SCHEMA_VERSION 1

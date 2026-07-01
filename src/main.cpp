@@ -7,6 +7,7 @@
 #include "app/AppSettings.h"
 #include "ui/viewmodels/AppController.h"
 #include "ui/viewmodels/ThemeController.h"
+#include "Version.h"
 
 #include <QApplication>
 #include <QQmlApplicationEngine>
@@ -21,6 +22,8 @@
 #include <QImage>
 #include <QDir>
 #include <QFileInfo>
+
+#include <cstdio>
 
 namespace {
 
@@ -55,6 +58,16 @@ bool hasUsableOpenGL()
 
 int main(int argc, char* argv[])
 {
+    // --version / -v：打印版本号后退出（不需要启动 QApplication 和 QML 引擎）
+    for (int i = 1; i < argc; ++i) {
+        const QString arg = QString::fromLocal8Bit(argv[i]);
+        if (arg == QStringLiteral("--version") || arg == QStringLiteral("-v")) {
+            std::fprintf(stdout, "FengSui %s\n", FENGSUI_VERSION_STRING);
+            std::fflush(stdout);
+            return 0;
+        }
+    }
+
     // 使用 Basic 风格，让 Qt Quick Controls 完全受自定义主题控制，
     // 避免回退到平台原生风格（如 Windows 风格）与暗色主题冲突。
     QQuickStyle::setStyle(QStringLiteral("Basic"));

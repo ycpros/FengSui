@@ -4,6 +4,7 @@
 #include "app/Application.h"
 #include "app/AppSettings.h"
 #include "app/Logger.h"
+#include "Version.h"
 #include "core/BeaconService.h"
 #include "core/CourierService.h"
 #include "core/ShareService.h"
@@ -94,7 +95,7 @@ Application::Application(int& argc, char** argv)
 {
     // 设置应用元信息，影响 QStandardPaths 和窗口标题等
     setApplicationName("FengSui");
-    setApplicationVersion("0.1.0");
+    setApplicationVersion(FENGSUI_VERSION_STRING);
     setOrganizationName("FengSui");
 }
 

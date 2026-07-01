@@ -15,7 +15,7 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 600
     visible: true
-    title: qsTr("烽燧 FengSui")
+    title: qsTr("烽燧 FengSui %1").arg(Qt.application.version)
     color: Theme.bg
 
     // 关闭窗口时：仅在托盘后端可用且设置了「最小化到托盘」时隐藏；

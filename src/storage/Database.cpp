@@ -2,6 +2,7 @@
 // SQLite 数据库初始化与 schema 创建实现。
 
 #include "storage/Database.h"
+#include "Version.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -75,7 +76,7 @@ bool Database::initialize()
         return false;
     }
 
-    qInfo() << "Database initialized successfully, schema version 1";
+    qInfo() << "Database initialized successfully, schema version" << FENGSUI_DB_SCHEMA_VERSION;
     return true;
 }
 
@@ -272,7 +273,7 @@ bool Database::initializeVersion()
     // 表为空则插入初始版本记录
     if (query.value(0).toInt() == 0) {
         QSqlQuery insert(database());
-        insert.prepare("INSERT INTO schema_version (version) VALUES (1)");
+        insert.prepare(QStringLiteral("INSERT INTO schema_version (version) VALUES (%1)").arg(FENGSUI_DB_SCHEMA_VERSION));
         if (!insert.exec()) {
             qCritical() << "Failed to insert schema_version";
             return false;

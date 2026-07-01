@@ -153,6 +153,15 @@ Item {
                             }
                         }
                     }
+
+                    // 版本信息
+                    Label {
+                        text: qsTr("烽燧 FengSui 版本 %1").arg(Qt.application.version)
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSm
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+
                     Item { Layout.fillHeight: true }
                 }
             }
