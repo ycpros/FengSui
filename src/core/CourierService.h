@@ -1,6 +1,6 @@
 // CourierService.h
 // 文件传输编排服务：管理传输请求、接受/拒绝、分块收发、SHA-256 校验和进度上报。
-// 不包含 QWidget，通过 signal/slot 与 UI 交互。
+// 不包含界面控件，通过 signal/slot 与 UI 交互。
 // 复用 SignalService 管理的 TCP 连接发送控制消息和二进制 chunk。
 
 #pragma once

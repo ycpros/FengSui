@@ -128,7 +128,7 @@ consistent with the current architecture:
 - Use QML/Qt Quick for UI work. QtWidgets is linked only for the Windows system tray backend.
 - Use Qt Network for networking.
 - Use `QJsonDocument` and related Qt JSON types for protocol serialization.
-- Keep QWidget code out of `core/`, `network/`, and `storage/`.
+- Keep UI code out of `core/`, `network/`, and `storage/`.
 - Add or update QtTest coverage for behavior changes.
 - Prefer clear, local changes over broad refactors.
 

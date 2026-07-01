@@ -116,7 +116,7 @@ src/
 - UI 开发使用 QML/Qt Quick。QtWidgets 仅作为 Windows 系统托盘后端链接。
 - 网络能力使用 Qt Network。
 - 协议序列化使用 `QJsonDocument` 及相关 Qt JSON 类型。
-- 不在 `core/`、`network/`、`storage/` 中编写 QWidget 代码。
+- 不在 `core/`、`network/`、`storage/` 中编写 UI 代码。
 - 行为变更需要新增或更新 QtTest 覆盖。
 - 优先提交清晰的局部变更，避免无关的大范围重构。
 

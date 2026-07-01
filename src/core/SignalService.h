@@ -1,7 +1,7 @@
 // SignalService.h
 // TCP 消息通道编排服务：管理 TcpServer 和所有 TcpConnection，负责消息路由、
 // ACK 自动回复、重复连接解决、待发送队列。
-// 不包含 QWidget，仅通过 signal/slot 与 UI 层交互。
+// 不包含界面控件，仅通过 signal/slot 与 UI 层交互。
 
 #pragma once
 

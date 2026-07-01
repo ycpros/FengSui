@@ -1,7 +1,7 @@
 // main.cpp
 // FengSui 桌面客户端入口。
 // 初始化 → 软件渲染回退检测 → 加载 QML 主壳 → 事件循环。
-// 迁移到 QML 后不再实例化 QMainWindow，改用 QQmlApplicationEngine 加载 Main.qml。
+// 迁移到 QML 后改用 QQmlApplicationEngine 加载 Main.qml。
 
 #include "app/Application.h"
 #include "app/AppSettings.h"

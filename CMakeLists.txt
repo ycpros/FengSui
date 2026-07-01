@@ -19,15 +19,14 @@ set(CMAKE_AUTOUIC OFF)
 
 # 查找 Qt6 模块。UI 迁移到 QML：应用目标链接 Quick / QuickControls2 / Qml。
 # Widgets 仅作为 Windows 托盘（Qt.labs.platform -> QSystemTrayIcon）的后端依赖，
-# 旧 Qt Widgets 页面仍不参与构建；Network / Sql 供下层使用；Test 仅供自动化测试目标使用。
+# 旧 Qt Widgets 页面已删除；Network / Sql 供下层使用；Test 仅供自动化测试目标使用。
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 Network Sql Test)
 
 # 启用 Qt 标准工程设置（qt_add_qml_module 等命令需要，要求 Qt 6.8+）
 qt_standard_project_setup(REQUIRES 6.8)
 
 # 应用后端源文件（非 QML/ViewModel 部分）。
-# 旧 Qt Widgets UI（MainWindow / 各 Page / Dialog / OnboardingWizard / TrayManager /
-# UiStyle）已从构建中移除，磁盘暂留作迁移参考；UI 由 QML + ViewModel 承载。
+# 旧 Qt Widgets UI 已删除；UI 由 QML + ViewModel 承载。
 # models 层元对象编译单元 + 头文件。models 为纯头（Q_GADGET/Q_NAMESPACE），
 # Models.cpp 通过 include 触发 AUTOMOC 生成 staticMetaObject。凡引用这些类型元对象
 # 的目标（主程序、各测试）都需链接此列表，否则链接期报 staticMetaObject 未解析。
