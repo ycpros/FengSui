@@ -36,3 +36,9 @@ __pycache__/
 coverage/
 .nyc_output/
 *.lcov
+
+# Local-only project notes and prototypes
+docs/
+prototype/
+CLAUDE.md
+.claude/
