@@ -12,9 +12,11 @@ workflow simple, inspectable, and local-first.
 
 ## Project Status
 
-FengSui is in early MVP development. The repository contains a working QML/Qt Quick application
-shell, local persistence, LAN discovery and TCP messaging foundations, file transfer workflows,
-shared-folder browsing, and QtTest coverage for core behaviors.
+FengSui is in early MVP development. The repository contains a functional QML/Qt Quick application
+with full-featured pages for contacts, chat, transfer center, settings (including network diagnostics),
+shared-folder management, and first-run onboarding. It includes local SQLite persistence, LAN discovery
+and TCP messaging, file transfer workflows with progress tracking, and QtTest coverage for core services,
+ViewModels, and protocol serialization.
 
 The project is not yet a stable release. Protocols, UI details, database tables, and workflows may
 change before v1.0.
@@ -22,15 +24,17 @@ change before v1.0.
 ## Features
 
 - LAN peer discovery with UDP broadcast on the same subnet.
-- Manual peer connection by IP address and port when broadcast discovery is unavailable.
+- Manual peer connection by IP address and port when broadcast discovery is unavailable, with TCP probe verification.
 - One-to-one text conversations with local SQLite persistence.
 - Individual file transfer over TCP, including accept, reject, cancel, progress, and history views.
 - Transfer Center page for filtering and reviewing transfer tasks.
 - Shared folder publishing, remote browsing, file download, and local access approval.
-- First-run onboarding for display name, discovery preference, and default download directory.
-- Settings and diagnostics views for network policy, interfaces, manual peers, and basic checks.
+- First-run onboarding wizard for display name, discovery preference, and default download directory.
+- Settings page with network policy configuration, interface enumeration, manual peer management, and built-in network diagnostics.
+- Dark and light theme support with system-level switching.
+- Software rendering fallback for environments without usable OpenGL (remote desktop, headless, older drivers).
 - Cross-platform QML/Qt Quick UI targeting Windows, Linux, and macOS.
-- Automated tests built with QtTest and CTest.
+- Automated tests built with QtTest and CTest, covering core services, ViewModels, network protocol, and storage.
 
 ## Current Limitations
 
@@ -53,9 +57,14 @@ change before v1.0.
 - Tests: QtTest and CTest
 - Target platforms: Windows, Linux, and macOS
 
-The v1 line intentionally avoids Electron, Flutter, web front-end frameworks, third-party network
-libraries, and background service dependencies. On Windows, the system tray uses QtWidgets as the
-backend for Qt.labs.platform/QSystemTrayIcon while the application UI remains QML/Qt Quick.
+The v1 line intentionally avoids Electron, Flutter, web front-end frameworks, Qt WebEngine,
+third-party network libraries, and background service dependencies. On Windows, the system tray
+uses QtWidgets as the backend for Qt.labs.platform/QSystemTrayIcon while the application UI
+remains QML/Qt Quick.
+
+The application includes a dark/light theme system (switchable at runtime via `--theme dark|light`),
+a software rendering fallback for headless or remote desktop environments, and a `--screenshot`
+developer flag for capturing window snapshots in CI or headless validation.
 
 ## Build From Source
 
@@ -102,23 +111,31 @@ ctest --test-dir cmake-build-debug --output-on-failure
 
 ```text
 src/
-├── app/        Application startup, settings, and logging
-├── core/       Business services for discovery, messaging, sharing, and transfer
-├── models/     Shared data structures
-├── network/    UDP/TCP networking and protocol serialization
-├── platform/   Platform-specific helpers
+├── main.cpp    Application entry point
+├── app/        Application class, settings facade, and logging
+├── core/       Business services (Beacon, Signal, Courier, Share, TcpProbe)
+├── models/     Shared data structures and enums (Q_GADGET / Q_NAMESPACE)
+├── network/    UDP discovery, TCP connection/server, and protocol serialization
+├── platform/   Platform detection, host info, and network interface enumeration
 ├── storage/    SQLite database and repository classes
-├── tests/      QtTest test targets
-└── ui/         QML pages, components, dialogs, and ViewModels
+├── tests/      QtTest targets (services, ViewModels, protocol, storage, QML reflection)
+└── ui/
+    ├── qml/           Application shell, theme singleton, and JS utilities
+    ├── components/    Reusable QML components (buttons, cards, bubbles, inputs, etc.)
+    ├── pages/         QML pages (Contacts, Chat, TransferCenter, Settings, Share, Onboarding)
+    ├── dialogs/       QML dialogs (AddPeer, IncomingTransfer, ShareAccess)
+    ├── viewmodels/    C++ ViewModels and list models bridging QML ↔ core services
+    └── assets/        Static resources (tray icon, etc.)
 ```
 
 Layering conventions:
 
-- `ui/` handles presentation and user interaction, and calls services from `core/`.
+- `ui/qml/` renders the UI and binds to ViewModel properties; it never calls core services directly.
+- `ui/viewmodels/` bridges QML and core: exposes data via `Q_PROPERTY` and `QAbstractListModel`, forwards user actions to core services, and relays service signals back to QML.
 - `core/` owns business behavior and may call `network/` and `storage/`.
 - `network/` owns sockets, connections, and protocol payloads.
 - `storage/` is the only database access layer and returns data through `models/`.
-- `models/` stays lightweight and shared across layers.
+- `models/` stays lightweight (pure structs and enums) and is shared across all layers.
 
 ## Contributing
 
@@ -126,10 +143,12 @@ Contributions are welcome while the project is still taking shape. Please keep c
 consistent with the current architecture:
 
 - Use QML/Qt Quick for UI work. QtWidgets is linked only for the Windows system tray backend.
+- Use C++ ViewModels (`QAbstractListModel` / `QObject` with `QML_ELEMENT`) to bridge QML and core services.
+- Expose shared enums to QML via `QML_FOREIGN_NAMESPACE` in `ui/viewmodels/QmlEnums.h`.
 - Use Qt Network for networking.
 - Use `QJsonDocument` and related Qt JSON types for protocol serialization.
-- Keep UI code out of `core/`, `network/`, and `storage/`.
-- Add or update QtTest coverage for behavior changes.
+- Keep UI and ViewModel code out of `core/`, `network/`, and `storage/`.
+- Add or update QtTest coverage for behavior changes (core services, ViewModels, protocol, or storage).
 - Prefer clear, local changes over broad refactors.
 
 ## Security Notes
