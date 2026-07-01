@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <QObject>       // Q_GADGET / Q_PROPERTY 需要
 #include <QString>
 #include <QDateTime>
 
@@ -10,6 +11,12 @@ namespace FengSui {
 
 // 共享访问授权
 struct AccessGrant {
+    Q_GADGET
+    Q_PROPERTY(QString peerId MEMBER peerId)
+    Q_PROPERTY(QString shareId MEMBER shareId)
+    Q_PROPERTY(QDateTime grantedAt MEMBER grantedAt)
+    Q_PROPERTY(bool remember MEMBER remember)
+public:
     QString peerId;           // 被授权设备的 peerId
     QString shareId;          // 被授权的共享目录 shareId
     QDateTime grantedAt;

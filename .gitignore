@@ -18,6 +18,8 @@ vendor/
 dist/
 build/
 out/
+cmake-build-*/
+build.ps1
 *.exe
 *.dll
 *.so

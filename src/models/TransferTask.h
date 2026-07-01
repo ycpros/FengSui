@@ -3,31 +3,31 @@
 
 #pragma once
 
+#include "models/ModelEnums.h"  // TransferDirection / TransferStatus 枚举定义 + QML 反射注册
+#include <QObject>              // Q_GADGET / Q_PROPERTY 需要
 #include <QMetaType>
 #include <QString>
 #include <QDateTime>
 
 namespace FengSui {
 
-// 传输方向
-enum class TransferDirection {
-    Upload,     // 我发出
-    Download    // 我接收
-};
-
-// 传输状态
-enum class TransferStatus {
-    Waiting,        // 等待对方接受
-    Rejected,       // 对方拒绝
-    Transferring,   // 传输中
-    Completed,      // 传输完成
-    Failed,         // 传输失败
-    Cancelled       // 已取消
-};
-
 // 文件传输任务。
 // 存储在 transfer_tasks 表中，传输中心页面从此读取。
 struct TransferTask {
+    Q_GADGET
+    Q_PROPERTY(QString transferId MEMBER transferId)
+    Q_PROPERTY(TransferDirection direction MEMBER direction)
+    Q_PROPERTY(QString peerId MEMBER peerId)
+    Q_PROPERTY(QString fileName MEMBER fileName)
+    Q_PROPERTY(QString filePath MEMBER filePath)
+    Q_PROPERTY(qint64 fileSize MEMBER fileSize)
+    Q_PROPERTY(qint64 transferredBytes MEMBER transferredBytes)
+    Q_PROPERTY(QString sha256 MEMBER sha256)
+    Q_PROPERTY(TransferStatus status MEMBER status)
+    Q_PROPERTY(QString errorMessage MEMBER errorMessage)
+    Q_PROPERTY(QDateTime createdAt MEMBER createdAt)
+    Q_PROPERTY(QDateTime completedAt MEMBER completedAt)
+public:
     QString transferId;          // UUID
     TransferDirection direction;
     QString peerId;              // 对方 peerId

@@ -12,7 +12,7 @@ workflow simple, inspectable, and local-first.
 
 ## Project Status
 
-FengSui is in early MVP development. The repository contains a working Qt Widgets application
+FengSui is in early MVP development. The repository contains a working QML/Qt Quick application
 shell, local persistence, LAN discovery and TCP messaging foundations, file transfer workflows,
 shared-folder browsing, and QtTest coverage for core behaviors.
 
@@ -29,7 +29,7 @@ change before v1.0.
 - Shared folder publishing, remote browsing, file download, and local access approval.
 - First-run onboarding for display name, discovery preference, and default download directory.
 - Settings and diagnostics views for network policy, interfaces, manual peers, and basic checks.
-- Cross-platform Qt Widgets UI targeting Windows, Linux, and macOS.
+- Cross-platform QML/Qt Quick UI targeting Windows, Linux, and macOS.
 - Automated tests built with QtTest and CTest.
 
 ## Current Limitations
@@ -46,15 +46,16 @@ change before v1.0.
 ## Tech Stack
 
 - Language: C++17
-- UI: Qt 6 Widgets
+- UI: Qt 6 QML / Qt Quick
 - Networking: Qt Network with UDP and TCP
 - Storage: SQLite through Qt SQL
 - Build: CMake 3.20+
 - Tests: QtTest and CTest
 - Target platforms: Windows, Linux, and macOS
 
-The v1 line intentionally avoids QML, Qt Quick, Electron, Flutter, web front-end frameworks, third-party
-network libraries, and background service dependencies.
+The v1 line intentionally avoids Electron, Flutter, web front-end frameworks, third-party network
+libraries, and background service dependencies. On Windows, the system tray uses QtWidgets as the
+backend for Qt.labs.platform/QSystemTrayIcon while the application UI remains QML/Qt Quick.
 
 ## Build From Source
 
@@ -108,7 +109,7 @@ src/
 ├── platform/   Platform-specific helpers
 ├── storage/    SQLite database and repository classes
 ├── tests/      QtTest test targets
-└── ui/         Qt Widgets windows, pages, and dialogs
+└── ui/         QML pages, components, dialogs, and ViewModels
 ```
 
 Layering conventions:
@@ -124,7 +125,7 @@ Layering conventions:
 Contributions are welcome while the project is still taking shape. Please keep changes focused and
 consistent with the current architecture:
 
-- Use Qt Widgets for UI work.
+- Use QML/Qt Quick for UI work. QtWidgets is linked only for the Windows system tray backend.
 - Use Qt Network for networking.
 - Use `QJsonDocument` and related Qt JSON types for protocol serialization.
 - Keep QWidget code out of `core/`, `network/`, and `storage/`.

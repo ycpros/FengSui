@@ -43,6 +43,10 @@ public:
     bool minimizeToTray() const;
     void setMinimizeToTray(bool enabled);
 
+    // 主题模式："system"（跟随系统，默认）/ "light" / "dark"
+    QString themeMode() const;
+    void setThemeMode(const QString& mode);
+
     // ---- 网络设置 ----
 
     // 获取本机设备唯一标识。

@@ -3,24 +3,26 @@
 // 按 14_network_model.md §4.1 规则过滤。
 #pragma once
 
+#include "models/ModelEnums.h"  // InterfaceType 枚举定义 + QML 反射注册
 #include <QHostAddress>
 #include <QList>
+#include <QObject>              // Q_GADGET / Q_PROPERTY 需要
 #include <QString>
 
 namespace FengSui {
 
-// 网卡类型分类
-enum class InterfaceType {
-    Physical,  // 物理网卡（Ethernet、Wi-Fi）
-    Virtual,   // 虚拟网卡（VMware、Hyper-V、WSL、ZeroTier 等）
-    Loopback,  // 回环接口
-    LinkLocal, // 链路本地地址（169.254.0.0/16）
-    Public,    // 公网地址（非 RFC1918）
-    Unknown    // 无法分类
-};
-
 // 本机网卡信息
 struct NetworkInterfaceInfo {
+    Q_GADGET
+    Q_PROPERTY(QString id MEMBER id)
+    Q_PROPERTY(QString name MEMBER name)
+    Q_PROPERTY(QString displayName MEMBER displayName)
+    Q_PROPERTY(int prefixLength MEMBER prefixLength)
+    Q_PROPERTY(bool isPhysical MEMBER isPhysical)
+    Q_PROPERTY(InterfaceType type MEMBER type)
+    // 只读派生属性：CIDR 字符串（供 QML 直接绑定显示）
+    Q_PROPERTY(QString cidr READ cidr CONSTANT)
+public:
     QString       id;           // 网卡唯一标识（QNetworkInterface::name()）
     QString       name;         // 网卡可读名称（如 "Ethernet"）
     QString       displayName;  // 显示名称（如 "Ethernet 192.168.10.25"）

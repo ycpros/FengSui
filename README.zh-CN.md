@@ -9,7 +9,7 @@
 
 ## 项目状态
 
-烽燧目前处于早期 MVP 开发阶段。仓库中已经包含可运行的 Qt Widgets 应用外壳、本地持久化、局域网发现与 TCP 消息基础、文件传输流程、共享文件夹浏览，以及覆盖核心行为的 QtTest 测试。
+烽燧目前处于早期 MVP 开发阶段。仓库中已经包含可运行的 QML/Qt Quick 应用外壳、本地持久化、局域网发现与 TCP 消息基础、文件传输流程、共享文件夹浏览，以及覆盖核心行为的 QtTest 测试。
 
 项目尚未发布稳定版本。v1.0 前协议、界面细节、数据库表和工作流都可能继续调整。
 
@@ -23,7 +23,7 @@
 - 本地共享文件夹发布、远端浏览、文件下载和本地访问授权。
 - 首次启动向导，用于设置显示名称、发现偏好和默认下载目录。
 - 设置与诊断页面，用于查看网络策略、网卡、手动连接记录和基础检查。
-- 面向 Windows、Linux 和 macOS 的跨平台 Qt Widgets 界面。
+- 面向 Windows、Linux 和 macOS 的跨平台 QML/Qt Quick 界面。
 - 基于 QtTest 和 CTest 的自动化测试。
 
 ## 当前限制
@@ -37,14 +37,14 @@
 ## 技术栈
 
 - 语言：C++17
-- UI：Qt 6 Widgets
+- UI：Qt 6 QML / Qt Quick
 - 网络：Qt Network，基于 UDP 和 TCP
 - 存储：SQLite，通过 Qt SQL 访问
 - 构建：CMake 3.20+
 - 测试：QtTest 和 CTest
 - 目标平台：Windows、Linux、macOS
 
-v1 系列刻意不使用 QML、Qt Quick、Electron、Flutter、Web 前端框架、第三方网络库或额外后台服务依赖。
+v1 系列刻意不使用 Electron、Flutter、Web 前端框架、第三方网络库或额外后台服务依赖。Windows 上系统托盘通过 QtWidgets 作为 Qt.labs.platform/QSystemTrayIcon 的后端实现，应用界面仍保持 QML/Qt Quick。
 
 ## 从源码构建
 
@@ -98,7 +98,7 @@ src/
 ├── platform/   平台相关工具
 ├── storage/    SQLite 数据库和 Repository
 ├── tests/      QtTest 测试目标
-└── ui/         Qt Widgets 窗口、页面和对话框
+└── ui/         QML 页面、组件、对话框和 ViewModel
 ```
 
 分层约定：
@@ -113,7 +113,7 @@ src/
 
 项目仍在成型中，欢迎贡献。请尽量让变更保持聚焦，并符合当前架构：
 
-- UI 开发使用 Qt Widgets。
+- UI 开发使用 QML/Qt Quick。QtWidgets 仅作为 Windows 系统托盘后端链接。
 - 网络能力使用 Qt Network。
 - 协议序列化使用 `QJsonDocument` 及相关 Qt JSON 类型。
 - 不在 `core/`、`network/`、`storage/` 中编写 QWidget 代码。

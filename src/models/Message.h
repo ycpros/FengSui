@@ -3,29 +3,28 @@
 
 #pragma once
 
+#include "models/ModelEnums.h"  // MessageType / MessageStatus 枚举定义 + QML 反射注册
+#include <QObject>              // Q_GADGET / Q_PROPERTY 需要
 #include <QString>
 #include <QDateTime>
 
 namespace FengSui {
 
-// 消息类型
-enum class MessageType {
-    Text,           // 文本消息
-    FileRequest,    // 文件传输请求（聊天窗口显示为"发送了 xxx.pdf"）
-    System          // 系统消息（如"对方已接收文件"）
-};
-
-// 消息投递状态
-enum class MessageStatus {
-    Sending,        // 正在发送
-    Sent,           // 已发送（等待对方 ack）
-    Delivered,      // 对方已确认收到
-    Failed          // 发送失败
-};
-
 // 消息数据结构。
 // 存储在 messages 表中，通过 conversationId 关联会话。
 struct Message {
+    Q_GADGET
+    Q_PROPERTY(QString messageId MEMBER messageId)
+    Q_PROPERTY(QString conversationId MEMBER conversationId)
+    Q_PROPERTY(QString senderId MEMBER senderId)
+    Q_PROPERTY(MessageType type MEMBER type)
+    Q_PROPERTY(QString content MEMBER content)
+    Q_PROPERTY(QDateTime createdAt MEMBER createdAt)
+    Q_PROPERTY(MessageStatus status MEMBER status)
+    Q_PROPERTY(QString fileName MEMBER fileName)
+    Q_PROPERTY(qint64 fileSize MEMBER fileSize)
+    Q_PROPERTY(QString transferId MEMBER transferId)
+public:
     QString messageId;       // UUID，如 "msg_a1b2c3d4"
     QString conversationId;  // 所属会话 ID
     QString senderId;        // 发送方 peerId

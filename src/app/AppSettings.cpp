@@ -17,6 +17,7 @@ static const char* KEY_DISPLAY_NAME        = "display_name";
 static const char* KEY_DOWNLOAD_DIR        = "download_dir";
 static const char* KEY_AUTO_START          = "auto_start";
 static const char* KEY_MINIMIZE_TO_TRAY    = "minimize_to_tray";
+static const char* KEY_THEME_MODE          = "theme_mode";
 static const char* KEY_PEER_ID             = "peer_id";
 static const char* KEY_DISCOVERY_ENABLED   = "discovery_enabled";
 static const char* KEY_LISTEN_PORT         = "listen_port";
@@ -97,6 +98,16 @@ bool AppSettings::minimizeToTray() const
 void AppSettings::setMinimizeToTray(bool enabled)
 {
     writeValue(KEY_MINIMIZE_TO_TRAY, enabled ? "1" : "0");
+}
+
+QString AppSettings::themeMode() const
+{
+    return readValue(KEY_THEME_MODE, QStringLiteral("system"));
+}
+
+void AppSettings::setThemeMode(const QString& mode)
+{
+    writeValue(KEY_THEME_MODE, mode.trimmed());
 }
 
 // ---- 网络设置 ----

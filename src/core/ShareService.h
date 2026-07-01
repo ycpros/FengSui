@@ -31,6 +31,12 @@ class TcpConnection;
 
 // 远程共享目录摘要。
 struct RemoteSharedFolder {
+    Q_GADGET
+    Q_PROPERTY(QString peerId MEMBER peerId)
+    Q_PROPERTY(QString shareId MEMBER shareId)
+    Q_PROPERTY(QString displayName MEMBER displayName)
+    Q_PROPERTY(int fileCount MEMBER fileCount)
+public:
     QString peerId;       // 来源设备 peerId。
     QString shareId;      // 远程共享目录 ID。
     QString displayName;  // 远程显示名称。
@@ -39,6 +45,15 @@ struct RemoteSharedFolder {
 
 // 远程共享目录项。
 struct RemoteShareItem {
+    Q_GADGET
+    Q_PROPERTY(QString peerId MEMBER peerId)
+    Q_PROPERTY(QString shareId MEMBER shareId)
+    Q_PROPERTY(QString path MEMBER path)
+    Q_PROPERTY(QString name MEMBER name)
+    Q_PROPERTY(qint64 size MEMBER size)
+    Q_PROPERTY(QString modifiedAt MEMBER modifiedAt)
+    Q_PROPERTY(bool isDir MEMBER isDir)
+public:
     QString peerId;      // 来源设备 peerId。
     QString shareId;     // 来源共享目录 ID。
     QString path;        // 项目相对共享根目录的路径。
