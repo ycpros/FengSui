@@ -119,6 +119,7 @@ set(QML_FILES
     src/ui/components/PageHeader.qml
     src/ui/components/OsBadge.qml
     src/ui/components/DeviceCard.qml
+    src/ui/components/AppComboBox.qml
     src/ui/components/AppTextField.qml
     src/ui/components/ThinProgressBar.qml
     src/ui/components/AppSwitch.qml

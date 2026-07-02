@@ -117,15 +117,15 @@ Item {
                         SettingRow {
                             label: qsTr("主题")
                             description: qsTr("跟随系统，或强制亮色/暗色")
-                            ComboBox {
+                            AppComboBox {
                                 Layout.preferredWidth: 140
+                                textRole: "text"
+                                valueRole: "value"
                                 model: [
                                     { text: qsTr("跟随系统"), value: "system" },
                                     { text: qsTr("亮色"),     value: "light" },
                                     { text: qsTr("暗色"),     value: "dark" }
                                 ]
-                                textRole: "text"
-                                valueRole: "value"
                                 currentIndex: {
                                     var m = ThemeController.mode
                                     return m === "light" ? 1 : (m === "dark" ? 2 : 0)
@@ -196,15 +196,15 @@ Item {
                         }
                         SettingRow {
                             label: qsTr("网络模式")
-                            ComboBox {
+                            AppComboBox {
                                 Layout.preferredWidth: 160
+                                textRole: "text"
+                                valueRole: "value"
                                 model: [
                                     { text: qsTr("安全内网"),   value: "secure_lan" },
                                     { text: qsTr("多网卡内网"), value: "multi_lan" },
                                     { text: qsTr("兼容测试"),   value: "compat_test" }
                                 ]
-                                textRole: "text"
-                                valueRole: "value"
                                 currentIndex: {
                                     var m = root.vm.networkMode
                                     return m === "multi_lan" ? 1 : (m === "compat_test" ? 2 : 0)

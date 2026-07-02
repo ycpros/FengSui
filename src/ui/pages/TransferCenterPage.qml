@@ -48,10 +48,12 @@ Item {
                 onTextChanged: AppController.transfer.tasks.keyword = text
             }
 
-            ComboBox {
+            AppComboBox {
                 id: statusCombo
                 Layout.preferredWidth: 140
                 font.pixelSize: Theme.fontSm
+                textRole: "text"
+                valueRole: "value"
                 model: [
                     { text: qsTr("全部"),   value: -1 },
                     { text: qsTr("等待中"), value: 0 },
@@ -61,8 +63,18 @@ Item {
                     { text: qsTr("已拒绝"), value: 1 },
                     { text: qsTr("已取消"), value: 5 }
                 ]
-                textRole: "text"
-                valueRole: "value"
+                currentIndex: {
+                    var f = AppController.transfer.tasks.statusFilter
+                    switch (f) {
+                    case 0: return 1
+                    case 2: return 2
+                    case 3: return 3
+                    case 4: return 4
+                    case 1: return 5
+                    case 5: return 6
+                    default: return 0
+                    }
+                }
                 onActivated: AppController.transfer.tasks.statusFilter = currentValue
             }
 
