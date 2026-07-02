@@ -24,6 +24,7 @@ English | [简体中文](README.zh-CN.md)
 - [🏗️ Architecture](#-architecture)
 - [📦 Build From Source](#-build-from-source)
 - [📁 Repository Layout](#-repository-layout)
+- [🚢 Release Packaging](#-release-packaging)
 - [🧪 Tests](#-tests)
 - [⚠️ Current Limitations](#-current-limitations)
 - [🤝 Contributing](#-contributing)
@@ -234,6 +235,26 @@ src/
     │                       ShareAccess)
     ├── viewmodels/       11 ViewModel classes bridging QML ↔ core
     └── assets/           Tray icon & static resources
+```
+
+---
+
+## 🚢 Release Packaging
+
+FengSui can be installed into a portable release directory with plain CMake. Run these commands from an MSVC-enabled shell with Ninja available:
+
+```powershell
+cmake -S . -B cmake-build-release -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_PREFIX_PATH=D:/Software/Qt6.8.3/6.8.3/msvc2022_64
+cmake --build cmake-build-release --target fengsui
+cmake --install cmake-build-release --prefix release/FengSui-0.5.0-win64
+```
+
+The installed directory contains `fengsui.exe`, Qt runtime DLLs, plugins, QML imports, and `qt.conf`. Launch the packaged app with:
+
+```powershell
+.\release\FengSui-0.5.0-win64\fengsui.exe
 ```
 
 ---

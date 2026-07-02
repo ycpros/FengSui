@@ -18,6 +18,7 @@ vendor/
 dist/
 build/
 out/
+release/
 cmake-build-*/
 build.ps1
 *.exe

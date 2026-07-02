@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(FengSui VERSION 0.5.0 LANGUAGES CXX)
+project(FengSui VERSION 0.6.1 LANGUAGES CXX)
 
 # C++17 标准，按 10_coding_rules.md 要求
 set(CMAKE_CXX_STANDARD 17)
@@ -216,6 +216,19 @@ target_link_libraries(fengsui PRIVATE
     Qt6::Sql
 )
 
+# Qt.labs.platform（系统托盘依赖）被 qmlimportscanner 标记为 PLUGINISOPTIONAL，
+# 在构建期不会被部署到构建目录。为保证 Release 构建目录中 fengsui.exe 可直接运行，
+# 通过 POST_BUILD 将 Qt/labs QML 模块从 Qt SDK 复制到构建目录。
+# 此步骤仅影响开发阶段的构建目录运行；cmake --install 生成的发布包由 windeployqt
+# 负责完整部署，不依赖此 POST_BUILD。
+get_filename_component(_qt_qml_path "${Qt6_DIR}/../../../qml" ABSOLUTE)
+add_custom_command(TARGET fengsui POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+    "${_qt_qml_path}/Qt/labs"
+    "$<TARGET_FILE_DIR:fengsui>/qml/Qt/labs"
+    COMMENT "Copying Qt.labs.platform QML module to build dir (system tray)"
+)
+
 # 项目内部 include 路径。除 src 根外，额外暴露 viewmodels 目录，
 # 使 qt_add_qml_module 生成的类型注册文件能以 <QmlEnums.h> 定位到外部命名空间头。
 file(REAL_PATH "${CMAKE_SOURCE_DIR}/src" FENGSUI_SRC_DIR)
@@ -240,6 +253,84 @@ elseif(APPLE)
 elseif(UNIX)
     target_compile_definitions(fengsui PRIVATE FENGSUI_PLATFORM_LINUX)
 endif()
+
+# ---- 安装 / 便携发布目录 ----
+
+if(WIN32)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(FENGSUI_PACKAGE_PLATFORM "win64")
+    else()
+        set(FENGSUI_PACKAGE_PLATFORM "win32")
+    endif()
+elseif(APPLE)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+        set(FENGSUI_PACKAGE_PLATFORM "macos-arm64")
+    else()
+        set(FENGSUI_PACKAGE_PLATFORM "macos-x64")
+    endif()
+elseif(UNIX)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        set(FENGSUI_PACKAGE_PLATFORM "linux-arm64")
+    else()
+        set(FENGSUI_PACKAGE_PLATFORM "linux-x64")
+    endif()
+endif()
+
+set(FENGSUI_RELEASE_DIR
+    "${CMAKE_SOURCE_DIR}/release/FengSui-${PROJECT_VERSION}-${FENGSUI_PACKAGE_PLATFORM}"
+)
+
+add_custom_target(install_fengsui
+    COMMAND ${CMAKE_COMMAND}
+        --install "${CMAKE_BINARY_DIR}"
+        --config Release
+        --prefix "${FENGSUI_RELEASE_DIR}"
+    DEPENDS fengsui
+    USES_TERMINAL
+    COMMENT "Installing FengSui to ${FENGSUI_RELEASE_DIR}"
+)
+
+# 直接安装到 prefix 根目录，便于通过 `cmake --install --prefix release/FengSui-...`
+# 生成可复制的 Windows 便携目录，而不依赖额外打包脚本。
+install(TARGETS fengsui
+    RUNTIME DESTINATION . COMPONENT Runtime
+)
+
+qt_generate_deploy_qml_app_script(
+    TARGET fengsui
+    OUTPUT_SCRIPT fengsui_deploy_script
+    NO_TRANSLATIONS
+)
+install(CODE "
+    if(NOT IS_ABSOLUTE \"\${CMAKE_INSTALL_PREFIX}\")
+        get_filename_component(CMAKE_INSTALL_PREFIX \"\${CMAKE_INSTALL_PREFIX}\" ABSOLUTE
+            BASE_DIR \"${CMAKE_SOURCE_DIR}\"
+        )
+    endif()
+" COMPONENT Runtime)
+install(SCRIPT ${fengsui_deploy_script} COMPONENT Runtime)
+install(CODE "
+    # windeployqt 将运行时 DLL 和 qt.conf 放到 bin/ 子目录，
+    # 但 fengsui.exe 在安装根目录。将 bin/ 内容展平到根目录，
+    # 使 qt.conf 与 exe 同层，Qt 才能正确定位 plugins/ 和 qml/。
+    set(__bindir \"\${CMAKE_INSTALL_PREFIX}/bin\")
+    if(EXISTS \"\${__bindir}\")
+        file(GLOB __bin_files LIST_DIRECTORIES true \"\${__bindir}/*\")
+        foreach(__f \${__bin_files})
+            get_filename_component(__name \"\${__f}\" NAME)
+            file(RENAME \"\${__f}\" \"\${CMAKE_INSTALL_PREFIX}/\${__name}\")
+        endforeach()
+        file(REMOVE_RECURSE \"\${__bindir}\")
+        # bin/ 中的 qt.conf 的 Prefix = ..（指向根目录），展平
+        # 后需改为 Prefix = .（qt.conf 现在与 exe 同层）。
+        set(__qtconf \"\${CMAKE_INSTALL_PREFIX}/qt.conf\")
+        if(EXISTS \"\${__qtconf}\")
+            file(READ \"\${__qtconf}\" __qtconf_content)
+            string(REPLACE \"Prefix = ..\" \"Prefix = .\" __qtconf_content \"\${__qtconf_content}\")
+            file(WRITE \"\${__qtconf}\" \"\${__qtconf_content}\")
+        endif()
+    endif()
+" COMPONENT Runtime)
 
 # ---- 自动化测试 ----
 

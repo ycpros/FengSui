@@ -24,6 +24,7 @@
 - [🏗️ 架构设计](#-架构设计)
 - [📦 从源码构建](#-从源码构建)
 - [📁 仓库结构](#-仓库结构)
+- [🚢 发布打包](#-发布打包)
 - [🧪 测试](#-测试)
 - [⚠️ 当前限制](#-当前限制)
 - [🤝 参与贡献](#-参与贡献)
@@ -234,6 +235,26 @@ src/
     │                       共享授权）
     ├── viewmodels/       11 个 ViewModel 类（QML ↔ core 桥接）
     └── assets/           托盘图标与静态资源
+```
+
+---
+
+## 🚢 发布打包
+
+烽燧可以直接通过 CMake 安装到便携发布目录。请在已加载 MSVC 环境且可使用 Ninja 的终端中执行：
+
+```powershell
+cmake -S . -B cmake-build-release -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_PREFIX_PATH=D:/Software/Qt6.8.3/6.8.3/msvc2022_64
+cmake --build cmake-build-release --target fengsui
+cmake --install cmake-build-release --prefix release/FengSui-0.5.0-win64
+```
+
+安装后的目录会包含 `fengsui.exe`、Qt 运行库 DLL、插件、QML imports 和 `qt.conf`。可通过以下命令启动发布版：
+
+```powershell
+.\release\FengSui-0.5.0-win64\fengsui.exe
 ```
 
 ---
