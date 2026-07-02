@@ -55,10 +55,22 @@ void AppController::setCurrentIndex(int index)
 
 bool AppController::onboardingNeeded() const
 {
+    if (m_onboardingSuppressed) {
+        return false;
+    }
     if (!m_app || !m_app->settings()) {
         return false;
     }
     return !m_app->settings()->onboardingCompleted();
+}
+
+void AppController::setOnboardingSuppressed(bool suppressed)
+{
+    if (suppressed == m_onboardingSuppressed) {
+        return;
+    }
+    m_onboardingSuppressed = suppressed;
+    emit onboardingNeededChanged();
 }
 
 QString AppController::displayName() const

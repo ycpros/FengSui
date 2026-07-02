@@ -44,6 +44,7 @@ public:
     void setCurrentIndex(int index);
 
     bool onboardingNeeded() const;
+    void setOnboardingSuppressed(bool suppressed);
 
     QString displayName() const;
 
@@ -71,6 +72,7 @@ signals:
 private:
     Application*        m_app = nullptr;
     int                m_currentIndex = 0;
+    bool               m_onboardingSuppressed = false;
     ContactsViewModel* m_contacts = nullptr;
     TransferViewModel* m_transfer = nullptr;
     SettingsViewModel* m_settings = nullptr;

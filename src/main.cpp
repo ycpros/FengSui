@@ -54,6 +54,26 @@ bool hasUsableOpenGL()
     return ok;
 }
 
+int screenshotPageIndex(const QString& pageName)
+{
+    if (pageName == QStringLiteral("chat")) {
+        return 0;
+    }
+    if (pageName == QStringLiteral("contacts")) {
+        return 1;
+    }
+    if (pageName == QStringLiteral("transfer")) {
+        return 2;
+    }
+    if (pageName == QStringLiteral("share")) {
+        return 3;
+    }
+    if (pageName == QStringLiteral("settings")) {
+        return 4;
+    }
+    return -1;
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -90,6 +110,9 @@ int main(int argc, char* argv[])
         qCritical() << "Application initialization failed, exiting";
         return 1;
     }
+    const QStringList args = app.arguments();
+    const int shotIdx = args.indexOf(QStringLiteral("--screenshot"));
+    const bool screenshotRequested = shotIdx >= 0 && shotIdx + 1 < args.size();
 
     // models 层枚举通过 ui/viewmodels/QmlEnums.h 的 QML_FOREIGN_NAMESPACE 静态暴露为
     // QML 类型 Enums（属于 FengSui.Ui 模块），QML 中直接 import 后即可使用。
@@ -99,6 +122,32 @@ int main(int argc, char* argv[])
     auto* appController = new FengSui::AppController(&app, &app);
     auto* themeController = new FengSui::ThemeController(&app);
     themeController->setAppSettings(app.settings());
+
+    if (screenshotRequested) {
+        appController->setOnboardingSuppressed(true);
+
+        const int pageIdx = args.indexOf(QStringLiteral("--screenshot-page"));
+        if (pageIdx >= 0) {
+            if (pageIdx + 1 >= args.size()) {
+                qWarning() << "screenshot-page: missing page name";
+                return 2;
+            }
+
+            const QString pageName = args.at(pageIdx + 1).trimmed().toLower();
+            const int targetIndex = screenshotPageIndex(pageName);
+            if (targetIndex < 0) {
+                qWarning() << "screenshot-page: unknown page" << pageName
+                           << "(expected chat, contacts, transfer, share, or settings)";
+                return 2;
+            }
+            appController->setCurrentIndex(targetIndex);
+        }
+
+        const int themeIdx = args.indexOf(QStringLiteral("--theme"));
+        if (themeIdx >= 0 && themeIdx + 1 < args.size()) {
+            themeController->setMode(args.at(themeIdx + 1));
+        }
+    }
 
     // 首次向导未完成时，不在此启动服务：由 QML 向导页在 finish 后经
     // AppController::completeOnboarding 刷新策略、启动服务并绑定各子 ViewModel。
@@ -124,14 +173,8 @@ int main(int argc, char* argv[])
 
     // 开发用截图：--screenshot <路径> 加载后抓取窗口 PNG 并退出，
     // 便于在无人值守/无头环境下核对界面外观。可配合 --theme dark|light。
-    const QStringList args = app.arguments();
-    const int shotIdx = args.indexOf(QStringLiteral("--screenshot"));
-    if (shotIdx >= 0 && shotIdx + 1 < args.size()) {
+    if (screenshotRequested) {
         const QString outPath = args.at(shotIdx + 1);
-        const int themeIdx = args.indexOf(QStringLiteral("--theme"));
-        if (themeIdx >= 0 && themeIdx + 1 < args.size()) {
-            themeController->setMode(args.at(themeIdx + 1));
-        }
         auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
         if (window) {
             // 等待场景图完成首帧再抓取，避免截到空白。

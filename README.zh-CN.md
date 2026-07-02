@@ -64,10 +64,19 @@
 
 ## 🖼️ 界面截图
 
-> 界面稳定后将补充截图。开发阶段可通过以下命令生成快照：
-> ```bash
-> ./fengsui --screenshot screenshot.png --theme dark
-> ```
+| 消息                                        | 联系人                                            |
+|-------------------------------------------|------------------------------------------------|
+| ![消息页面](assets/screenshots/chat-dark.png) | ![联系人页面](assets/screenshots/contacts-dark.png) |
+
+| 传输中心 | 共享文件 |
+|---|---|
+| ![传输中心页面](assets/screenshots/transfer-dark.png) | ![共享文件页面](assets/screenshots/share-dark.png) |
+
+开发阶段可通过以下命令重新生成快照：
+
+```bash
+./fengsui --screenshot assets/screenshots/chat-dark.png --screenshot-page chat --theme dark
+```
 
 ---
 
@@ -174,6 +183,7 @@ cmake --build cmake-build-debug
 |---|---|
 | `--theme dark\|light` | 覆盖系统主题 |
 | `--screenshot <路径>` | 截取窗口快照后退出（用于 CI / 无头环境） |
+| `--screenshot-page <页面>` | 选择截图页面：`chat`、`contacts`、`transfer`、`share` 或 `settings` |
 
 ---
 

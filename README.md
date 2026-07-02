@@ -64,10 +64,19 @@ English | [简体中文](README.zh-CN.md)
 
 ## 🖼️ Screenshots
 
-> Screenshots will be added as the UI stabilizes. You can generate a snapshot for development review:
-> ```bash
-> ./fengsui --screenshot screenshot.png --theme dark
-> ```
+| Messages                                           | Contacts                                               |
+|----------------------------------------------------|--------------------------------------------------------|
+| ![Messages page](assets/screenshots/chat-dark.png) | ![Contacts page](assets/screenshots/contacts-dark.png) |
+
+| Transfer Center                                               | Shared Files                                            |
+|---------------------------------------------------------------|---------------------------------------------------------|
+| ![Transfer Center page](assets/screenshots/transfer-dark.png) | ![Shared Files page](assets/screenshots/share-dark.png) |
+
+Generate updated snapshots for development review:
+
+```bash
+./fengsui --screenshot assets/screenshots/chat-dark.png --screenshot-page chat --theme dark
+```
 
 ---
 
@@ -174,6 +183,7 @@ cmake --build cmake-build-debug
 |---|---|
 | `--theme dark\|light` | Override the system theme |
 | `--screenshot <path>` | Capture a window snapshot and exit (CI / headless) |
+| `--screenshot-page <page>` | Select the page for screenshots: `chat`, `contacts`, `transfer`, `share`, or `settings` |
 
 ---
 
