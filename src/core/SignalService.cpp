@@ -203,7 +203,7 @@ QString SignalService::sendMessage(const PeerInfo& peer, const QString& content)
         msg.createdAt = QDateTime::currentDateTimeUtc();
         msg.status = MessageStatus::Sending;
 
-        if (m_messageRepo->saveMessage(msg)) {
+        if (m_messageRepo->saveMessage(msg) == MessageSaveResult::Inserted) {
             emit messageStored(msg);
 
             // 更新会话最后消息摘要
@@ -374,7 +374,7 @@ void SignalService::onConnectionMessage(const QJsonObject& message)
                 : QDateTime::fromString(createdAtStr, Qt::ISODate);
             msg.status = MessageStatus::Delivered;  // 已收到，视为已送达
 
-            if (m_messageRepo->saveMessage(msg)) {
+            if (m_messageRepo->saveMessage(msg) == MessageSaveResult::Inserted) {
                 emit messageStored(msg);
 
                 // 更新会话最后消息和未读计数

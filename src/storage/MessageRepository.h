@@ -14,6 +14,14 @@ class QSqlQuery;
 
 namespace FengSui {
 
+    // 消息保存结果情况
+    enum class MessageSaveResult
+    {
+        Inserted,   // 首次写入成功
+        Existed,    // 已有相同messageId
+        Failed      // SQLite执行失败
+    };
+
 class Database;
 
 // 消息持久化仓库。
@@ -26,7 +34,7 @@ public:
 
     // 保存一条消息（使用 INSERT OR IGNORE 防止重复 messageId）。
     // 返回 true 表示成功写入。
-    bool saveMessage(const Message& message);
+    MessageSaveResult saveMessage(const Message& message);
 
     // 分页获取会话消息历史，按 created_at 升序排列（旧消息在前）。
     // conversationId: 会话 ID。

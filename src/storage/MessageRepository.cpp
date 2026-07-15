@@ -19,11 +19,11 @@ MessageRepository::MessageRepository(Database* database, QObject* parent)
 {
 }
 
-bool MessageRepository::saveMessage(const Message& message)
+MessageSaveResult MessageRepository::saveMessage(const Message& message)
 {
     if (!m_database) {
         qWarning() << "MessageRepository has no database";
-        return false;
+        return MessageSaveResult::Failed;
     }
 
     QSqlQuery query(m_database->database());
@@ -45,15 +45,16 @@ bool MessageRepository::saveMessage(const Message& message)
 
     if (!query.exec()) {
         qWarning() << "Failed to save message:" << query.lastError().text();
-        return false;
+        return MessageSaveResult::Failed;
     }
 
     // numRowsAffected == 0 表示已有同 messageId 的记录被忽略（去重生效）
     if (query.numRowsAffected() == 0) {
         qInfo() << "Message" << message.messageId << "already exists, ignored (dedup)";
+        return MessageSaveResult::Existed;
     }
 
-    return true;
+    return MessageSaveResult::Inserted;
 }
 
 QList<Message> MessageRepository::getMessages(const QString& conversationId,
