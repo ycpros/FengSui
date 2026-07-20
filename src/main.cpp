@@ -118,8 +118,9 @@ int main(int argc, char* argv[])
     // models 层枚举通过 ui/viewmodels/QmlEnums.h 的 QML_FOREIGN_NAMESPACE 静态暴露为
     // QML 类型 Enums（属于 FengSui.Ui 模块），QML 中直接 import 后即可使用。
 
-    // 构造顶层控制器（注入 Application）与主题控制器（注入 AppSettings），
-    // 以单例形式注册给 QML。必须在 engine.load 之前完成注册。
+    // 构造顶层控制器（注入 Application）、主题控制器和托盘控制器，随后以单例形式
+    // 注册给 QML。托盘控制器由 app 作为父对象持有，生命周期覆盖 QML 引擎。
+    // 截图模式禁用托盘，避免自动化运行在用户桌面留下短暂图标或触发托盘行为。
     auto* appController = new FengSui::AppController(&app, &app);
     auto* themeController = new FengSui::ThemeController(&app);
     auto* systemTray = new FengSui::SystemTrayController(!screenshotRequested, &app);
@@ -162,6 +163,8 @@ int main(int argc, char* argv[])
         appController->bindServices();
     }
 
+    // 单例必须在 engine.loadFromModule() 前注册。QML 仅通过 SystemTray.available
+    // 判断关闭窗口时能否安全隐藏，不直接持有 QSystemTrayIcon 或菜单对象。
     qmlRegisterSingletonInstance("FengSui.Ui", 1, 0, "AppController", appController);
     qmlRegisterSingletonInstance("FengSui.Ui", 1, 0, "ThemeController", themeController);
     qmlRegisterSingletonInstance("FengSui.Ui", 1, 0, "SystemTray", systemTray);
@@ -179,6 +182,8 @@ int main(int argc, char* argv[])
         qCritical() << "QML root object is not a QQuickWindow, exiting";
         return 1;
     }
+
+    // 根窗口创建成功后才绑定并显示托盘图标，保证托盘的所有恢复入口都有有效目标。
     systemTray->attachWindow(rootWindow);
 
     // 开发用截图：--screenshot <路径> 加载后抓取窗口 PNG 并退出，

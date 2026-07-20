@@ -69,11 +69,15 @@ public:
 
     // ---- 网络策略 ----
 
-    // 授权网卡 ID 列表（逗号分隔），默认空
+    // 授权网卡 ID 列表（逗号分隔），默认空。
+    // Application 启动时会移除失效、非物理和重复 ID；没有有效 ID 时自动回退到
+    // 当前主物理网卡，并把校正结果写回此设置。
     QString selectedInterfaces() const;
     void setSelectedInterfaces(const QString& ids);
 
-    // 允许网段 CIDR 列表（逗号分隔），默认空
+    // 自动推导的允许网段 CIDR 缓存（逗号分隔），默认空。
+    // 该值仅用于持久化和兼容旧数据库，不是用户配置输入。Application 每次启动都会
+    // 根据授权物理网卡的当前 IPv4 地址与前缀覆盖它，读取旧值不会影响运行时策略。
     QString allowedCidrs() const;
     void setAllowedCidrs(const QString& cidrs);
 

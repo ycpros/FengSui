@@ -26,8 +26,28 @@ private slots:
     void getBindEndpointsSecureLan();
     void getBindEndpointsMultiLan();
     void getBindEndpointsCompatTest();
+    void resolveSelectedInterfaces();
+    void deriveCidrsForSelectedInterfaces();
     void interfaceEnumeratorFiltersLoopback();
 };
+
+FengSui::NetworkInterfaceInfo interfaceInfo(const QString& id,
+                                            const QString& ip,
+                                            int prefixLength,
+                                            bool physical = true)
+{
+    // 构造不依赖宿主机真实网络状态的合成网卡条目，使策略测试可稳定覆盖多地址、
+    // 虚拟网卡和失效选择场景。
+    FengSui::NetworkInterfaceInfo info;
+    info.id = id;
+    info.name = id;
+    info.ip = QHostAddress(ip);
+    info.prefixLength = prefixLength;
+    info.isPhysical = physical;
+    info.type = physical ? FengSui::InterfaceType::Physical
+                         : FengSui::InterfaceType::Virtual;
+    return info;
+}
 
 void NetworkPolicyTest::defaultState()
 {
@@ -179,6 +199,67 @@ void NetworkPolicyTest::getBindEndpointsCompatTest()
 
     // compat_test 无授权网卡时返回空列表（调用方解释为 0.0.0.0）
     QVERIFY(endpoints.isEmpty());
+}
+
+void NetworkPolicyTest::resolveSelectedInterfaces()
+{
+    const QList<FengSui::NetworkInterfaceInfo> candidates = {
+        interfaceInfo(QStringLiteral("eth0"), QStringLiteral("192.168.1.20"), 24),
+        interfaceInfo(QStringLiteral("vpn0"), QStringLiteral("10.0.0.2"), 24, false),
+        interfaceInfo(QStringLiteral("eth1"), QStringLiteral("10.20.1.8"), 16),
+    };
+
+    // 有效选择保留原顺序；失效 ID、重复 ID 和非物理网卡 ID 都会被移除。
+    QCOMPARE(FengSui::InterfaceEnumerator::resolveSelectedInterfaceIds(
+                 {QStringLiteral("stale"), QStringLiteral("eth1"),
+                  QStringLiteral("eth1"), QStringLiteral("vpn0")},
+                 candidates),
+             QStringList{QStringLiteral("eth1")});
+
+    // 所有持久化选择失效时，回退到已排序候选列表中的首个物理网卡。
+    QCOMPARE(FengSui::InterfaceEnumerator::resolveSelectedInterfaceIds(
+                 {QStringLiteral("stale")}, candidates),
+             QStringList{QStringLiteral("eth0")});
+
+    // 系统没有任何候选网卡时保持空选择，等待下次应用启动重新检测。
+    QVERIFY(FengSui::InterfaceEnumerator::resolveSelectedInterfaceIds(
+                {QStringLiteral("stale")}, {}).isEmpty());
+
+    // 只有虚拟网卡不构成物理候选，也不能成为自动回退目标。
+    const QList<FengSui::NetworkInterfaceInfo> virtualOnly = {
+        interfaceInfo(QStringLiteral("vpn0"), QStringLiteral("10.0.0.2"), 24, false),
+    };
+    QVERIFY(FengSui::InterfaceEnumerator::resolveSelectedInterfaceIds(
+                {QStringLiteral("vpn0")}, virtualOnly).isEmpty());
+}
+
+void NetworkPolicyTest::deriveCidrsForSelectedInterfaces()
+{
+    const QList<FengSui::NetworkInterfaceInfo> interfaces = {
+        interfaceInfo(QStringLiteral("eth0"), QStringLiteral("192.168.10.25"), 24),
+        interfaceInfo(QStringLiteral("eth0"), QStringLiteral("192.168.10.90"), 24),
+        interfaceInfo(QStringLiteral("eth0"), QStringLiteral("10.4.2.1"), 8),
+        interfaceInfo(QStringLiteral("eth1"), QStringLiteral("172.16.5.8"), 16),
+        interfaceInfo(QStringLiteral("eth2"), QStringLiteral("192.168.50.5"), 24),
+        interfaceInfo(QStringLiteral("vpn0"), QStringLiteral("10.99.0.2"), 16, false),
+    };
+
+    // 同一网卡的多个 IPv4 地址全部参与推导；相同子网去重，未授权和虚拟网卡忽略。
+    QCOMPARE(FengSui::InterfaceEnumerator::cidrsForSelectedInterfaces(
+                 {QStringLiteral("eth0"), QStringLiteral("eth1"),
+                  QStringLiteral("vpn0")},
+                 interfaces),
+             (QStringList{QStringLiteral("192.168.10.0/24"),
+                          QStringLiteral("10.0.0.0/8"),
+                          QStringLiteral("172.16.0.0/16")}));
+
+    // 没有授权 ID 时不生成允许网段。
+    QVERIFY(FengSui::InterfaceEnumerator::cidrsForSelectedInterfaces(
+                {}, interfaces).isEmpty());
+
+    // 即使虚拟网卡 ID 被异常传入，也不能生成允许网段。
+    QVERIFY(FengSui::InterfaceEnumerator::cidrsForSelectedInterfaces(
+                {QStringLiteral("vpn0")}, interfaces).isEmpty());
 }
 
 void NetworkPolicyTest::interfaceEnumeratorFiltersLoopback()

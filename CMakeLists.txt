@@ -21,6 +21,8 @@ set(CMAKE_AUTOUIC OFF)
 # Widgets 仅作为 Windows 原生 QSystemTrayIcon 的后端依赖，
 # 旧 Qt Widgets 页面已删除；Network / Sql 供下层使用；Test 仅供自动化测试目标使用。
 if(NOT DEFINED CMAKE_PREFIX_PATH)
+    # 本机开发环境的默认 Qt SDK 路径。调用方通过命令行显式传入 CMAKE_PREFIX_PATH
+    # 时不会覆盖，CI、其他开发机和发布构建仍可选择自己的 Qt 安装位置。
     set(CMAKE_PREFIX_PATH
             "D:/Software/Qt6.8.3/6.8.3/msvc2022_64"
             CACHE PATH "Qt install path"
@@ -224,14 +226,20 @@ target_link_libraries(fengsui PRIVATE
     Qt6::Sql
 )
 
-# Windows 构建目录在链接后自动部署 Qt DLL、插件和 QML 导入，保证可直接运行。
-# 安装目录仍由下方 qt_generate_deploy_qml_app_script() 负责部署。
+# Windows 开发构建在链接后自动部署 Qt DLL、插件和 QML 导入，使构建目录无需 Qt SDK
+# PATH 即可直接运行。该步骤只服务构建目录；安装目录仍由下方
+# qt_generate_deploy_qml_app_script() 生成的脚本负责，二者不能互相替代。
 if(WIN32)
     add_custom_command(TARGET fengsui POST_BUILD
+        # 使用 Qt CMake 导出的工具目标，避免硬编码 windeployqt.exe 的具体位置。
         COMMAND "$<TARGET_FILE:Qt6::windeployqt>"
+            # 生成器表达式让单配置和多配置生成器都部署与当前目标一致的 DLL 类型。
             "$<$<CONFIG:Debug>:--debug>$<$<NOT:$<CONFIG:Debug>>:--release>"
+            # 扫描源码中的 QML import；缺少该参数时，仅分析 exe 可能漏掉动态 QML 模块。
             --qmldir "${CMAKE_SOURCE_DIR}/src"
+            # 项目当前没有 Qt 翻译包，跳过可减小开发构建目录并缩短部署时间。
             --no-translations
+            # MSVC 运行库由系统或安装器负责，不在每次开发构建后重复复制。
             --no-compiler-runtime
             "$<TARGET_FILE:fengsui>"
         COMMENT "Deploying Qt runtime and QML imports to the build directory"

@@ -55,39 +55,6 @@ QSet<QString> toSet(const QStringList& values)
     return result;
 }
 
-QStringList cidrsForSelectedInterfaces(const QStringList& selectedIds)
-{
-    QStringList cidrs;
-    const QSet<QString> selected = toSet(selectedIds);
-    if (selected.isEmpty()) {
-        return cidrs;
-    }
-
-    const QList<NetworkInterfaceInfo> interfaces = InterfaceEnumerator::enumerate();
-    for (const NetworkInterfaceInfo& iface : interfaces) {
-        if (!selected.contains(iface.id)) {
-            continue;
-        }
-        const QString cidr = iface.cidr();
-        if (NetworkPolicy::isValidCidr(cidr) && !cidrs.contains(cidr)) {
-            cidrs.append(cidr);
-        }
-    }
-    return cidrs;
-}
-
-QStringList validCidrs(const QStringList& cidrs)
-{
-    QStringList result;
-    for (const QString& cidr : cidrs) {
-        const QString trimmed = cidr.trimmed();
-        if (NetworkPolicy::isValidCidr(trimmed) && !result.contains(trimmed)) {
-            result.append(trimmed);
-        }
-    }
-    return result;
-}
-
 } // namespace
 
 Application::Application(int& argc, char** argv)
@@ -351,43 +318,34 @@ void Application::reloadNetworkPolicyFromSettings()
 
     const NetworkMode mode =
         NetworkPolicy::modeFromString(m_settings->networkMode());
-    QStringList selectedIds = splitCsvSetting(m_settings->selectedInterfaces());
-    QStringList cidrs = validCidrs(splitCsvSetting(m_settings->allowedCidrs()));
 
-    bool shouldPersist = false;
+    // candidates() 已完成物理网卡过滤和主网卡优先排序。持久化选择只作为授权意图，
+    // 必须先与当前候选快照校正，不能直接信任可能来自旧启动周期的网卡 ID。
     const QList<NetworkInterfaceInfo> candidates = InterfaceEnumerator::candidates();
+    const QStringList selectedIds =
+        InterfaceEnumerator::resolveSelectedInterfaceIds(
+            splitCsvSetting(m_settings->selectedInterfaces()), candidates);
 
-    // 首次启动或旧配置为空时，默认选择主物理候选网卡。
-    if (selectedIds.isEmpty() && !candidates.isEmpty()) {
-        selectedIds.append(candidates.first().id);
-        shouldPersist = true;
-    }
+    // allowed_cidrs 不作为输入：IP、掩码或 Wi-Fi 网络可能已经变化，每次重载都从
+    // 当前完整地址快照重新推导，保证旧的非空 CIDR 也会被替换。
+    const QStringList cidrs =
+        InterfaceEnumerator::cidrsForSelectedInterfaces(
+            selectedIds, InterfaceEnumerator::enumerate());
 
-    if (cidrs.isEmpty()) {
-        cidrs = cidrsForSelectedInterfaces(selectedIds);
-        if (cidrs.isEmpty() && !candidates.isEmpty()) {
-            const QString candidateCidr = candidates.first().cidr();
-            if (NetworkPolicy::isValidCidr(candidateCidr)) {
-                cidrs.append(candidateCidr);
-            }
-        }
-        shouldPersist = !cidrs.isEmpty();
-    }
-
+    // 先更新运行时对象，后续启动 BeaconService 和 SignalService 时即可使用同一份
+    // 已校正策略。网络服务运行后不会由设置页触发热重绑，变更在下次启动时生效。
     m_networkPolicy->setMode(mode);
     m_networkPolicy->setSelectedInterfaces(toSet(selectedIds));
     m_networkPolicy->setAllowedCidrs(cidrs);
 
+    // 数据库键继续保留以兼容旧版本，但 selected_interfaces 保存校正结果，
+    // allowed_cidrs 保存派生缓存。即使结果为空也必须写回，以清除过期配置。
     const QString normalizedMode = NetworkPolicy::modeToString(mode);
     if (m_settings->networkMode() != normalizedMode) {
-        if (m_settings->onboardingCompleted()) {
-            m_settings->setNetworkMode(normalizedMode);
-        }
+        m_settings->setNetworkMode(normalizedMode);
     }
-    if (shouldPersist && m_settings->onboardingCompleted()) {
-        m_settings->setSelectedInterfaces(selectedIds.join(QStringLiteral(",")));
-        m_settings->setAllowedCidrs(cidrs.join(QStringLiteral(",")));
-    }
+    m_settings->setSelectedInterfaces(selectedIds.join(QStringLiteral(",")));
+    m_settings->setAllowedCidrs(cidrs.join(QStringLiteral(",")));
 }
 
 TransferRepository* Application::transferRepository() const

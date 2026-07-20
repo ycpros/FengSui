@@ -6,6 +6,7 @@
 #include <QList>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
+#include <QSet>
 #include <QString>
 
 #include <algorithm>
@@ -150,6 +151,81 @@ QList<NetworkInterfaceInfo> InterfaceEnumerator::candidates()
               });
 
     return result;
+}
+
+QStringList InterfaceEnumerator::resolveSelectedInterfaceIds(
+    const QStringList &selectedIds,
+    const QList<NetworkInterfaceInfo> &candidateInterfaces)
+{
+    // 候选列表可能因一张网卡拥有多个 IPv4 地址而出现重复 ID。先构造集合，后续校正
+    // 只关心网卡是否仍存在且仍被分类为物理网卡。
+    QSet<QString> availableIds;
+    for (const NetworkInterfaceInfo &iface : candidateInterfaces) {
+        const QString id = iface.id.trimmed();
+        if (iface.isPhysical && !id.isEmpty()) {
+            availableIds.insert(id);
+        }
+    }
+
+    // 保留用户原有选择顺序，同时清除空白、失效、非物理和重复的网卡 ID。保留顺序
+    // 很重要：secure_lan 模式会使用首个匹配端点，校正不应无故改变用户优先级。
+    QStringList resolved;
+    for (const QString &selectedId : selectedIds) {
+        const QString id = selectedId.trimmed();
+        if (availableIds.contains(id) && !resolved.contains(id)) {
+            resolved.append(id);
+        }
+    }
+
+    // 空选择既可能来自首次启动，也可能表示原授权网卡已全部消失。候选列表已经按照
+    // 主网卡优先级排序，因此选择首个物理候选即可复用现有的主网卡判定规则。
+    if (resolved.isEmpty()) {
+        for (const NetworkInterfaceInfo &iface : candidateInterfaces) {
+            const QString id = iface.id.trimmed();
+            if (iface.isPhysical && !id.isEmpty()) {
+                resolved.append(id);
+                break;
+            }
+        }
+    }
+
+    return resolved;
+}
+
+QStringList InterfaceEnumerator::cidrsForSelectedInterfaces(
+    const QStringList &selectedIds,
+    const QList<NetworkInterfaceInfo> &interfaces)
+{
+    // 使用集合匹配授权 ID，避免重复选择导致同一网卡被重复处理。
+    QSet<QString> selected;
+    for (const QString &selectedId : selectedIds) {
+        const QString id = selectedId.trimmed();
+        if (!id.isEmpty()) {
+            selected.insert(id);
+        }
+    }
+
+    QStringList cidrs;
+    for (const NetworkInterfaceInfo &iface : interfaces) {
+        // interfaces 是完整枚举结果，可能包含虚拟、公网或状态异常的网卡。即使调用方
+        // 传入了异常 ID，也只能由当前仍有效的物理 IPv4 地址生成允许网段。
+        if (!iface.isPhysical
+            || !selected.contains(iface.id)
+            || iface.ip.protocol() != QAbstractSocket::IPv4Protocol
+            || iface.prefixLength < 0
+            || iface.prefixLength > 32) {
+            continue;
+        }
+
+        const QString cidr = iface.cidr();
+        // 多个地址可能落在同一子网，例如 DHCP 地址切换期间同时存在旧、新地址条目。
+        // 保持首次出现顺序并去重，使设置缓存和诊断输出稳定可读。
+        if (!cidr.isEmpty() && !cidrs.contains(cidr)) {
+            cidrs.append(cidr);
+        }
+    }
+
+    return cidrs;
 }
 
 QString NetworkInterfaceInfo::cidr() const

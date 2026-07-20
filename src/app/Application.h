@@ -100,8 +100,13 @@ public:
     // 获取当前运行时网络策略。
     NetworkPolicy* networkPolicy() const;
 
-    // 从 AppSettings 和当前网卡列表刷新运行时网络策略。
-    // 首次无配置时会选择主物理候选网卡和其 CIDR 作为 secure_lan 默认值。
+    // 根据 AppSettings 中的授权网卡 ID 和当前网卡快照重建运行时网络策略。
+    // 每次调用都会移除失效或非物理的授权 ID；没有有效选择时自动选择排序后的首个
+    // 物理候选网卡，并由其全部 IPv4 地址和前缀重新推导允许 CIDR。
+    // 持久化的 allowed_cidrs 仅作为自动生成缓存，不参与策略计算；本函数会用本次
+    // 推导结果覆盖该缓存，同时写回校正后的 selected_interfaces。
+    // 没有物理候选网卡时，运行策略和两个缓存都会被清空，以便下次启动重新检测。
+    // 线程安全性：仅在应用主线程、网络服务启动前调用；本函数不热重绑运行中的服务。
     void reloadNetworkPolicyFromSettings();
 
     // 获取传输任务存储仓库实例。

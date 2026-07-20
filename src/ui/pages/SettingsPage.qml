@@ -248,12 +248,18 @@ Item {
 
                     SectionCard {
                         Layout.fillWidth: true
-                        title: qsTr("允许网段 (CIDR)")
-                        AppTextField {
+                        title: qsTr("自动推导网段")
+                        // CIDR 由当前授权物理网卡实时推导，仅用于预览下次启动策略。
+                        // 使用 Text 而非输入控件，避免用户误以为该缓存仍可手工配置。
+                        Text {
                             Layout.fillWidth: true
-                            text: root.vm.allowedCidrs
-                            placeholderText: "192.168.1.0/24, 10.0.0.0/24"
-                            onEditingFinished: root.vm.allowedCidrs = text
+                            text: root.vm.allowedCidrs.length > 0
+                                  ? root.vm.allowedCidrs
+                                  : qsTr("（无可用网段）")
+                            color: Theme.text
+                            font.pixelSize: Theme.fontSm
+                            font.family: Theme.monoFamily
+                            wrapMode: Text.WordWrap
                         }
                     }
                     Item { Layout.fillHeight: true }

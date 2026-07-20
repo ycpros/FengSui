@@ -17,8 +17,10 @@ ApplicationWindow {
     title: qsTr("烽燧 FengSui %1").arg(Qt.application.version)
     color: Theme.bg
 
-    // 关闭窗口时：仅在托盘后端可用且设置了「最小化到托盘」时隐藏；
-    // 若托盘不可用则正常退出，避免后台存活却没有入口恢复窗口。
+    // 关闭窗口时：仅在托盘后端可用且设置了「最小化到托盘」时隐藏。
+    // SystemTray.available 是 C++ 控制器在构造阶段确定的只读状态；截图模式或系统
+    // 无托盘时为 false，此时不拦截关闭事件，让窗口按 Qt 默认行为正常退出，避免
+    // 后台进程存活却没有任何入口恢复窗口。
     onClosing: (close) => {
         if (AppController.settings.minimizeToTray && SystemTray.available) {
             close.accepted = false

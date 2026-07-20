@@ -142,14 +142,12 @@ void SettingsViewModel::setNetworkMode(const QString& v)
 
 QString SettingsViewModel::allowedCidrs() const
 {
-    return m_settings ? m_settings->allowedCidrs() : QString();
-}
-void SettingsViewModel::setAllowedCidrs(const QString& v)
-{
-    if (!m_settings || v == allowedCidrs()) return;
-    m_settings->setAllowedCidrs(v);
-    emit allowedCidrsChanged();
-    markNeedsRestart();
+    // 设置页展示的是“下次启动将采用的策略”，不能读取 allowed_cidrs 历史缓存。
+    // 直接使用当前网卡快照计算，使用户切换授权网卡或重新检测后立即看到预期结果。
+    const QStringList cidrs =
+        InterfaceEnumerator::cidrsForSelectedInterfaces(
+            resolvedSelectedInterfaceIds(), InterfaceEnumerator::enumerate());
+    return cidrs.join(QStringLiteral(", "));
 }
 
 // ---- 网卡列表 ----
@@ -160,10 +158,18 @@ QStringList SettingsViewModel::selectedInterfaceIds() const
     return m_settings->selectedInterfaces().split(QLatin1Char(','), Qt::SkipEmptyParts);
 }
 
+QStringList SettingsViewModel::resolvedSelectedInterfaceIds() const
+{
+    // candidates() 提供按主网卡优先级排序的物理候选列表，因此设置为空或全部过期时
+    // 与应用启动阶段使用相同的自动回退规则。
+    return InterfaceEnumerator::resolveSelectedInterfaceIds(
+        selectedInterfaceIds(), InterfaceEnumerator::candidates());
+}
+
 QVariantList SettingsViewModel::interfaces() const
 {
     QVariantList out;
-    const QStringList selected = selectedInterfaceIds();
+    const QStringList selected = resolvedSelectedInterfaceIds();
     const QList<NetworkInterfaceInfo> ifaces = InterfaceEnumerator::enumerate();
     for (const NetworkInterfaceInfo& i : ifaces) {
         QVariantMap m;
@@ -182,14 +188,22 @@ QVariantList SettingsViewModel::interfaces() const
 void SettingsViewModel::toggleInterface(const QString& id, bool selected)
 {
     if (!m_settings) return;
-    QStringList ids = selectedInterfaceIds();
+
+    // 从校正后的选择开始修改，避免用户操作时把旧的失效 ID 再次写回数据库。
+    QStringList ids = resolvedSelectedInterfaceIds();
     if (selected) {
         if (!ids.contains(id)) ids.append(id);
     } else {
         ids.removeAll(id);
     }
+    // 取消最后一张网卡后立即应用主网卡回退规则，使界面状态与下次启动策略一致。
+    ids = InterfaceEnumerator::resolveSelectedInterfaceIds(
+        ids, InterfaceEnumerator::candidates());
     m_settings->setSelectedInterfaces(ids.join(QLatin1Char(',')));
+
+    // 授权勾选和派生 CIDR 属于同一展示快照，必须一起通知 QML 更新。
     emit interfacesChanged();
+    emit allowedCidrsChanged();
     markNeedsRestart();
 }
 
@@ -222,7 +236,10 @@ int SettingsViewModel::diagOnlineCount() const
 
 void SettingsViewModel::refresh()
 {
+    // getter 会在 QML 重新读取属性时执行实时枚举。这里只发送通知，不改动运行中的
+    // NetworkPolicy，也不触发 BeaconService 或 SignalService 热重绑。
     emit interfacesChanged();
+    emit allowedCidrsChanged();
     emit diagChanged();
 }
 
