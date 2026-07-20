@@ -3,8 +3,8 @@
 
 // FengSui 应用主类，继承 QApplication，持有全局数据库、设置仓库和配置实例。
 // 负责应用级初始化（日志、数据库连接、设置加载）和生命周期管理。
-// UI 由 QQmlApplicationEngine 驱动，仍为 QML/Qt Quick；QApplication 仅用于支撑
-// Windows 上 Qt.labs.platform SystemTrayIcon 所需的 QtWidgets 托盘后端。
+// UI 由 QQmlApplicationEngine 驱动，仍为 QML/Qt Quick；QApplication 同时支撑
+// SystemTrayController 使用的原生 QSystemTrayIcon。
 
 #include <QApplication>
 

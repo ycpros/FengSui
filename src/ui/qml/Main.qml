@@ -5,7 +5,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt.labs.platform as Platform
 import FengSui.Ui
 
 ApplicationWindow {
@@ -21,39 +20,9 @@ ApplicationWindow {
     // 关闭窗口时：仅在托盘后端可用且设置了「最小化到托盘」时隐藏；
     // 若托盘不可用则正常退出，避免后台存活却没有入口恢复窗口。
     onClosing: (close) => {
-        if (AppController.settings.minimizeToTray && tray.available) {
+        if (AppController.settings.minimizeToTray && SystemTray.available) {
             close.accepted = false
             root.hide()
-        }
-    }
-
-    // 系统托盘。Windows 上 Qt.labs.platform 通过 QtWidgets/QSystemTrayIcon 后端实现，
-    // UI 本身仍保持 QML/Qt Quick。
-    Platform.SystemTrayIcon {
-        id: tray
-        visible: available
-        icon.source: "qrc:/qt/qml/FengSui.Ui/assets/tray.svg"
-        tooltip: qsTr("烽燧 FengSui")
-
-        onActivated: (reason) => {
-            if (reason === Platform.SystemTrayIcon.Trigger
-                || reason === Platform.SystemTrayIcon.DoubleClick) {
-                root.show()
-                root.raise()
-                root.requestActivate()
-            }
-        }
-
-        menu: Platform.Menu {
-            Platform.MenuItem {
-                text: qsTr("打开烽燧")
-                onTriggered: { root.show(); root.raise(); root.requestActivate() }
-            }
-            Platform.MenuSeparator {}
-            Platform.MenuItem {
-                text: qsTr("退出")
-                onTriggered: Qt.quit()
-            }
         }
     }
 

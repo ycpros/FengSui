@@ -5,6 +5,7 @@
 
 #include "app/Application.h"
 #include "app/AppSettings.h"
+#include "platform/SystemTrayController.h"
 #include "ui/viewmodels/AppController.h"
 #include "ui/viewmodels/ThemeController.h"
 #include "Version.h"
@@ -92,8 +93,8 @@ int main(int argc, char* argv[])
     // 避免回退到平台原生风格（如 Windows 风格）与暗色主题冲突。
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
-    // 创建 FengSui 应用实例。UI 仍由 QML/Qt Quick 承载；QApplication 仅用于
-    // 支撑 Windows 上 Qt.labs.platform SystemTrayIcon 的 QtWidgets 托盘后端。
+    // 创建 FengSui 应用实例。UI 仍由 QML/Qt Quick 承载；QApplication 同时
+    // 支撑 SystemTrayController 使用的原生 QSystemTrayIcon。
     FengSui::Application app(argc, argv);
 
     // QOffscreenSurface 依赖 QApplication 初始化出的 platform/screen。
@@ -121,6 +122,7 @@ int main(int argc, char* argv[])
     // 以单例形式注册给 QML。必须在 engine.load 之前完成注册。
     auto* appController = new FengSui::AppController(&app, &app);
     auto* themeController = new FengSui::ThemeController(&app);
+    auto* systemTray = new FengSui::SystemTrayController(!screenshotRequested, &app);
     themeController->setAppSettings(app.settings());
 
     if (screenshotRequested) {
@@ -162,6 +164,7 @@ int main(int argc, char* argv[])
 
     qmlRegisterSingletonInstance("FengSui.Ui", 1, 0, "AppController", appController);
     qmlRegisterSingletonInstance("FengSui.Ui", 1, 0, "ThemeController", themeController);
+    qmlRegisterSingletonInstance("FengSui.Ui", 1, 0, "SystemTray", systemTray);
 
     // 加载 QML 主壳
     QQmlApplicationEngine engine;
@@ -171,16 +174,22 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    auto* rootWindow = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    if (!rootWindow) {
+        qCritical() << "QML root object is not a QQuickWindow, exiting";
+        return 1;
+    }
+    systemTray->attachWindow(rootWindow);
+
     // 开发用截图：--screenshot <路径> 加载后抓取窗口 PNG 并退出，
     // 便于在无人值守/无头环境下核对界面外观。可配合 --theme dark|light。
     if (screenshotRequested) {
         const QString outPath = args.at(shotIdx + 1);
-        auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
-        if (window) {
+        if (rootWindow) {
             // 等待场景图完成首帧再抓取，避免截到空白。
-            QTimer::singleShot(800, window, [window, outPath]() {
+            QTimer::singleShot(800, rootWindow, [rootWindow, outPath]() {
                 QDir().mkpath(QFileInfo(outPath).absolutePath());
-                const QImage img = window->grabWindow();
+                const QImage img = rootWindow->grabWindow();
                 const bool ok = !img.isNull() && img.save(outPath);
                 qInfo() << "screenshot" << (ok ? "saved" : "FAILED") << outPath;
                 QApplication::exit(ok ? 0 : 2);

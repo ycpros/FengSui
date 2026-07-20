@@ -6,7 +6,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import FengSui.Ui
-import "../qml/Format.js" as Fmt
+import "../qml/Format.mjs" as Fmt
 
 Dialog {
     id: root

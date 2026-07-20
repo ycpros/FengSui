@@ -18,8 +18,14 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
 # 查找 Qt6 模块。UI 迁移到 QML：应用目标链接 Quick / QuickControls2 / Qml。
-# Widgets 仅作为 Windows 托盘（Qt.labs.platform -> QSystemTrayIcon）的后端依赖，
+# Widgets 仅作为 Windows 原生 QSystemTrayIcon 的后端依赖，
 # 旧 Qt Widgets 页面已删除；Network / Sql 供下层使用；Test 仅供自动化测试目标使用。
+if(NOT DEFINED CMAKE_PREFIX_PATH)
+    set(CMAKE_PREFIX_PATH
+            "D:/Software/Qt6.8.3/6.8.3/msvc2022_64"
+            CACHE PATH "Qt install path"
+    )
+endif()
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 Network Sql Test)
 
 # 启用 Qt 标准工程设置（qt_add_qml_module 等命令需要，要求 Qt 6.8+）
@@ -74,6 +80,7 @@ set(SOURCES
     # platform 层
     src/platform/PlatformUtils.cpp
     src/platform/InterfaceEnumerator.cpp
+    src/platform/SystemTrayController.cpp
 )
 
 # ui/viewmodels 层源文件（ViewModel + QAbstractListModel）。
@@ -138,7 +145,7 @@ set(QML_FILES
     src/ui/dialogs/ShareAccessDialog.qml
     src/ui/dialogs/IncomingTransferDialog.qml
     # JS 工具
-    src/ui/qml/Format.js
+    src/ui/qml/Format.mjs
 )
 
 # Theme.qml 是 pragma Singleton，需向 qt_add_qml_module 声明其为单例类型
@@ -181,6 +188,7 @@ set(HEADERS
     # platform 层
     src/platform/InterfaceEnumerator.h
     src/platform/PlatformUtils.h
+    src/platform/SystemTrayController.h
 )
 
 # 根据 CMake PROJECT_VERSION 生成版本头文件。
@@ -216,18 +224,20 @@ target_link_libraries(fengsui PRIVATE
     Qt6::Sql
 )
 
-# Qt.labs.platform（系统托盘依赖）被 qmlimportscanner 标记为 PLUGINISOPTIONAL，
-# 在构建期不会被部署到构建目录。为保证 Release 构建目录中 fengsui.exe 可直接运行，
-# 通过 POST_BUILD 将 Qt/labs QML 模块从 Qt SDK 复制到构建目录。
-# 此步骤仅影响开发阶段的构建目录运行；cmake --install 生成的发布包由 windeployqt
-# 负责完整部署，不依赖此 POST_BUILD。
-get_filename_component(_qt_qml_path "${Qt6_DIR}/../../../qml" ABSOLUTE)
-add_custom_command(TARGET fengsui POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-    "${_qt_qml_path}/Qt/labs"
-    "$<TARGET_FILE_DIR:fengsui>/qml/Qt/labs"
-    COMMENT "Copying Qt.labs.platform QML module to build dir (system tray)"
-)
+# Windows 构建目录在链接后自动部署 Qt DLL、插件和 QML 导入，保证可直接运行。
+# 安装目录仍由下方 qt_generate_deploy_qml_app_script() 负责部署。
+if(WIN32)
+    add_custom_command(TARGET fengsui POST_BUILD
+        COMMAND "$<TARGET_FILE:Qt6::windeployqt>"
+            "$<$<CONFIG:Debug>:--debug>$<$<NOT:$<CONFIG:Debug>>:--release>"
+            --qmldir "${CMAKE_SOURCE_DIR}/src"
+            --no-translations
+            --no-compiler-runtime
+            "$<TARGET_FILE:fengsui>"
+        COMMENT "Deploying Qt runtime and QML imports to the build directory"
+        VERBATIM
+    )
+endif()
 
 # 项目内部 include 路径。除 src 根外，额外暴露 viewmodels 目录，
 # 使 qt_add_qml_module 生成的类型注册文件能以 <QmlEnums.h> 定位到外部命名空间头。

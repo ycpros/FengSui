@@ -7,7 +7,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import FengSui.Ui
-import "../qml/Format.js" as Fmt
+import "../qml/Format.mjs" as Fmt
 
 Item {
     id: root
