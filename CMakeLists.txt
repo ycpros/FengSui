@@ -21,12 +21,17 @@ set(CMAKE_AUTOUIC OFF)
 # Widgets 仅作为 Windows 原生 QSystemTrayIcon 的后端依赖，
 # 旧 Qt Widgets 页面已删除；Network / Sql 供下层使用；Test 仅供自动化测试目标使用。
 if(NOT DEFINED CMAKE_PREFIX_PATH)
-    # 本机开发环境的默认 Qt SDK 路径。调用方通过命令行显式传入 CMAKE_PREFIX_PATH
-    # 时不会覆盖，CI、其他开发机和发布构建仍可选择自己的 Qt 安装位置。
-    set(CMAKE_PREFIX_PATH
-            "D:/Software/Qt6.8.3/6.8.3/msvc2022_64"
-            CACHE PATH "Qt install path"
-    )
+    if(WIN32)
+        set(CMAKE_PREFIX_PATH
+                "D:/Software/Qt6.8.3/6.8.3/msvc2022_64"
+                CACHE PATH "Qt install path"
+        )
+    elseif(UNIX)
+        set(CMAKE_PREFIX_PATH
+                "/opt/Qt/6.8.3/gcc_64"
+                CACHE PATH "Qt install path"
+        )
+    endif()
 endif()
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 Network Sql Test)
 
